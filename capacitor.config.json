@@ -1,0 +1,7 @@
+{
+  "appId": "com.simplebusiness.onemorebeat",
+  "appName": "ONE MORE BEAT",
+  "webDir": "dist",
+  "server": { "androidScheme": "https" },
+  "android": { "backgroundColor": "#05050a" }
+}
