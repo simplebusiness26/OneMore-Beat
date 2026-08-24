@@ -1,0 +1,138 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - build-status.txt
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        id: node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Set up Java
+        id: java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        id: npm
+        run: npm install --no-audit --no-fund
+
+      - name: Prepare web bundle
+        id: web
+        run: |
+          set -euxo pipefail
+          rm -rf dist android
+          mkdir -p dist/icons
+          cp index.html styles.css game.js manifest.webmanifest sw.js dist/
+          cp icons/icon.svg dist/icons/
+          test -s dist/index.html
+          test -s dist/game.js
+          test -s dist/styles.css
+
+      - name: Create Android project
+        id: capadd
+        run: npx cap add android
+
+      - name: Sync web assets
+        id: capsync
+        run: npx cap sync android
+
+      - name: Build debug APK
+        id: gradle
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Verify APK
+        id: verify
+        run: |
+          set -euxo pipefail
+          test -s android/app/build/outputs/apk/debug/app-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk one-more-beat-debug.apk
+          ls -lh one-more-beat-debug.apk
+
+      - name: Upload workflow artifact
+        id: artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: one-more-beat-debug-apk
+          path: one-more-beat-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish downloadable GitHub release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view android-latest >/dev/null 2>&1; then
+            gh release upload android-latest one-more-beat-debug.apk --clobber
+          else
+            gh release create android-latest one-more-beat-debug.apk \
+              --title "ONE MORE BEAT Android APK" \
+              --notes "Latest installable Android build of ONE MORE BEAT."
+          fi
+
+      - name: Record build diagnostics
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+          CHECKOUT: ${{ steps.checkout.outcome }}
+          NODE: ${{ steps.node.outcome }}
+          JAVA: ${{ steps.java.outcome }}
+          NPM: ${{ steps.npm.outcome }}
+          WEB: ${{ steps.web.outcome }}
+          CAPADD: ${{ steps.capadd.outcome }}
+          CAPSYNC: ${{ steps.capsync.outcome }}
+          GRADLE: ${{ steps.gradle.outcome }}
+          VERIFY: ${{ steps.verify.outcome }}
+          ARTIFACT: ${{ steps.artifact.outcome }}
+          RELEASE: ${{ steps.release.outcome }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          cat > build-status.txt <<STATUS
+          status=$JOB_STATUS
+          commit=$COMMIT_SHA
+          run_id=$RUN_ID
+          checkout=$CHECKOUT
+          setup_node=$NODE
+          setup_java=$JAVA
+          npm_install=$NPM
+          prepare_web=$WEB
+          capacitor_add_android=$CAPADD
+          capacitor_sync=$CAPSYNC
+          gradle_build=$GRADLE
+          verify_apk=$VERIFY
+          upload_artifact=$ARTIFACT
+          publish_release=$RELEASE
+          STATUS
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build-status.txt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Record Android build status [skip ci]"
+          git push
