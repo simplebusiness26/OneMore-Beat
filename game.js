@@ -26,7 +26,7 @@
   const state = {
     mode: 'start', score: 0, lane: 0, laneVisual: 0,
     held: false, holdStart: 0, pressStart: 0, pressBeat: -99, pressError: 999,
-    pressExpectedType: 'none', pressHandledTap: false, pressWasChoice: false, lastPressBeat: -99,
+    pressExpectedType: 'none', pressHandledTap: false, pressWasChoice: false, lastPressBeat: -99, lastPressDuration: 0,
     bpm: 108, beatMs: 60000 / 108, beatIndex: 0, beatPhase: 0, nextBeatAt: 0, lastBeatAt: 0,
     flash: 0, shake: 0, danger: 0, multiplier: 1, doubleMode: false, doubleUntil: 0,
     choiceActive: false, choiceStart: 0, choiceHold: 0, choiceResolved: false,
@@ -159,7 +159,7 @@
   function resetRun(now) {
     state.mode = 'playing'; state.score = 0; state.lane = 0; state.laneVisual = 0;
     state.held = false; state.holdStart = 0; state.pressStart = 0; state.pressBeat = -99; state.pressError = 999;
-    state.pressExpectedType = 'none'; state.pressHandledTap = false; state.pressWasChoice = false; state.lastPressBeat = -99;
+    state.pressExpectedType = 'none'; state.pressHandledTap = false; state.pressWasChoice = false; state.lastPressBeat = -99; state.lastPressDuration = 0;
     state.bpm = 108; state.beatMs = 60000 / state.bpm;
     state.beatIndex = 0; state.lastBeatAt = now; state.nextBeatAt = now + state.beatMs;
     state.flash = 0; state.shake = 0; state.danger = 0; state.multiplier = 1; state.doubleMode = false;
@@ -297,7 +297,8 @@
       perfect = ok && state.actionError <= perfectWindow;
     } else if (o.type === 'charge') {
       const holdError = Math.abs(state.holdStart - beatAt);
-      ok = state.held;
+      const completedHold = state.lastPressBeat === targetBeat && state.lastPressDuration >= clamp(state.beatMs * .16, 60, 90);
+      ok = state.held || completedHold;
       perfect = ok && holdError <= perfectWindow;
     } else if (o.type === 'rest') {
       ok = !state.held && state.lastPressBeat !== targetBeat;
@@ -602,6 +603,7 @@
     const expectedType = state.pressExpectedType;
     const handledTap = state.pressHandledTap;
 
+    if (!wasChoice) state.lastPressDuration = duration;
     setHold(false, now);
 
     if (!wasChoice && !handledTap && expectedType !== 'charge' && expectedType !== 'rest' && duration <= tapMaxMs()) {
