@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#05050a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>ONE MORE BEAT</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main id="app" aria-label="ONE MORE BEAT">
+    <canvas id="game" aria-label="Rhythm survival game"></canvas>
+
+    <section id="hud" class="hud" aria-live="polite">
+      <div class="hud-left">
+        <span class="eyebrow">BEATS</span>
+        <strong id="score">0</strong>
+      </div>
+      <div class="hud-center">
+        <span id="streak">READY</span>
+        <div class="beat-dots" aria-hidden="true">
+          <i></i><i></i><i></i><i></i>
+        </div>
+      </div>
+      <div class="hud-right">
+        <span class="eyebrow">BEST</span>
+        <strong id="best">0</strong>
+      </div>
+    </section>
+
+    <button id="mute" class="icon-button" type="button" aria-label="Toggle sound">♪</button>
+
+    <section id="start" class="overlay visible">
+      <div class="title-lockup">
+        <p class="kicker">SURVIVE THE RHYTHM</p>
+        <h1>ONE MORE<br><span>BEAT</span></h1>
+        <p id="start-best" class="best-line">BEST: 0</p>
+      </div>
+      <div class="instructions">
+        <p><b>TAP</b> to switch lane</p>
+        <p><b>HOLD</b> to charge through walls</p>
+        <p><b>WAIT</b> when the track is clear</p>
+      </div>
+      <button id="start-button" class="primary" type="button">TAP TO START</button>
+      <p class="micro">HEADPHONES ON · ONE FINGER · NO MERCY</p>
+    </section>
+
+    <section id="death" class="overlay death">
+      <div class="death-card">
+        <p class="kicker">RUN ENDED</p>
+        <h2 id="death-score">0 BEATS</h2>
+        <p id="death-best">BEST: 0</p>
+        <div id="death-rank" class="rank">WARMING UP</div>
+        <button id="retry-button" class="primary" type="button">ONE MORE?</button>
+      </div>
+    </section>
+
+    <section id="choice" class="choice" aria-live="assertive">
+      <div>
+        <span>SAFE</span>
+        <small>do nothing</small>
+      </div>
+      <div class="danger">
+        <span>DOUBLE OR NOTHING</span>
+        <small>hold to enter ×2</small>
+      </div>
+    </section>
+
+    <div id="toast" class="toast" aria-live="polite"></div>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
