@@ -24,13 +24,16 @@
   try { muted = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}').muted === true; } catch (_) {}
 
   const state = {
-    mode: 'start', score: 0, lane: 0, laneVisual: 0, held: false, holdStart: 0, pressStart: 0,
+    mode: 'start', score: 0, lane: 0, laneVisual: 0,
+    held: false, holdStart: 0, pressStart: 0, pressBeat: -99, pressError: 999,
+    pressExpectedType: 'none', pressHandledTap: false, pressWasChoice: false, lastPressBeat: -99,
     bpm: 108, beatMs: 60000 / 108, beatIndex: 0, beatPhase: 0, nextBeatAt: 0, lastBeatAt: 0,
     flash: 0, shake: 0, danger: 0, multiplier: 1, doubleMode: false, doubleUntil: 0,
     choiceActive: false, choiceStart: 0, choiceHold: 0, choiceResolved: false,
     perfects: 0, lastActionBeat: -99, lastActionType: 'none', actionError: 999,
-    obstacle: null, nextObstacle: null, particles: [], trails: [], stars: [],
-    messageTimer: 0, overdrive: false, runStartedAt: 0, graceBeats: 4
+    obstacle: null, nextObstacle: null, pendingResolution: null,
+    particles: [], trails: [], stars: [], messageTimer: 0,
+    overdrive: false, runStartedAt: 0, graceBeats: 6
   };
 
   class AudioEngine {
@@ -145,15 +148,25 @@
   function playerX() { return clamp(W * .2, 72, 160); }
   function timingX() { return playerX() + 16; }
 
+  function inputGraceMs() {
+    return clamp(state.beatMs * .30, 115, 160);
+  }
+
+  function tapMaxMs() {
+    return clamp(state.beatMs * .55, 150, 230);
+  }
+
   function resetRun(now) {
     state.mode = 'playing'; state.score = 0; state.lane = 0; state.laneVisual = 0;
-    state.held = false; state.bpm = 108; state.beatMs = 60000 / state.bpm;
+    state.held = false; state.holdStart = 0; state.pressStart = 0; state.pressBeat = -99; state.pressError = 999;
+    state.pressExpectedType = 'none'; state.pressHandledTap = false; state.pressWasChoice = false; state.lastPressBeat = -99;
+    state.bpm = 108; state.beatMs = 60000 / state.bpm;
     state.beatIndex = 0; state.lastBeatAt = now; state.nextBeatAt = now + state.beatMs;
     state.flash = 0; state.shake = 0; state.danger = 0; state.multiplier = 1; state.doubleMode = false;
     state.doubleUntil = 0; state.choiceActive = false; state.choiceResolved = false; state.perfects = 0;
-    state.lastActionBeat = -99; state.lastActionType = 'none'; state.actionError = 999;
+    state.lastActionBeat = -99; state.lastActionType = 'none'; state.actionError = 999; state.pendingResolution = null;
     state.obstacle = generateObstacle(1); state.nextObstacle = generateObstacle(2); state.particles = []; state.trails = [];
-    state.overdrive = false; state.runStartedAt = now; state.graceBeats = 4;
+    state.overdrive = false; state.runStartedAt = now; state.graceBeats = 6;
     ui.start.classList.remove('visible'); ui.death.classList.remove('visible'); ui.choice.classList.remove('visible');
     updateUI(); toast('LOCK IN');
     audio.ensure(); audio.tick(0, 0);
@@ -161,17 +174,18 @@
   }
 
   function difficulty() {
-    return clamp(state.score / 400 + (state.doubleMode ? .2 : 0), 0, 1);
+    return clamp(state.score / 520 + (state.doubleMode ? .15 : 0), 0, 1);
   }
 
   function generateObstacle(beatOffset = 1) {
+    if (state.choiceActive) return { type: 'none', lane: 0, beat: state.beatIndex + beatOffset };
     const d = difficulty();
     if (state.score < state.graceBeats) return { type: 'none', lane: 0, beat: state.beatIndex + beatOffset };
-    const density = lerp(.48, .76, d) + (state.doubleMode ? .08 : 0);
+    const density = lerp(.42, .72, d) + (state.doubleMode ? .06 : 0);
     if (Math.random() > density) return { type: 'none', lane: 0, beat: state.beatIndex + beatOffset };
     const roll = Math.random();
-    const chargeChance = lerp(.18, .30, d);
-    const restChance = lerp(.10, .18, d);
+    const chargeChance = lerp(.16, .28, d);
+    const restChance = lerp(.10, .17, d);
     if (roll < chargeChance) return { type: 'charge', lane: 0, beat: state.beatIndex + beatOffset };
     if (roll < chargeChance + restChance) return { type: 'rest', lane: 0, beat: state.beatIndex + beatOffset };
     return { type: 'switch', lane: 0, beat: state.beatIndex + beatOffset };
@@ -187,12 +201,20 @@
     return Math.abs(now - state.lastBeatAt) < Math.abs(state.nextBeatAt - now) ? state.beatIndex : state.beatIndex + 1;
   }
 
-  function handleTap(now) {
-    if (state.mode !== 'playing') return;
-    if (state.choiceActive) return;
-    const beat = actionBeat(now);
+  function obstacleForBeat(beat) {
+    if (state.obstacle && state.obstacle.beat === beat) return state.obstacle;
+    if (state.nextObstacle && state.nextObstacle.beat === beat) return state.nextObstacle;
+    if (state.pendingResolution && state.pendingResolution.obstacle && state.pendingResolution.beat === beat) return state.pendingResolution.obstacle;
+    return null;
+  }
+
+  function handleTap(now, beatOverride = null, errorOverride = null) {
+    if (state.mode !== 'playing' || state.choiceActive) return;
+    const beat = beatOverride ?? actionBeat(now);
     state.lane = state.lane === 0 ? 1 : 0;
-    state.lastActionBeat = beat; state.lastActionType = 'tap'; state.actionError = timingError(now);
+    state.lastActionBeat = beat;
+    state.lastActionType = 'tap';
+    state.actionError = errorOverride ?? timingError(now);
     state.flash = Math.max(state.flash, .16);
     burst(playerX(), laneY(state.lane === 0 ? -1 : 1), '#49f8ff', 8, 1.8);
     navigator.vibrate?.(8);
@@ -209,14 +231,17 @@
   }
 
   function resolveBeat(now) {
+    if (state.pendingResolution) processPendingResolution(now);
+    if (state.mode !== 'playing') return;
+
     state.lastBeatAt = now;
     state.beatIndex += 1;
     state.score += state.multiplier;
     state.flash = Math.max(state.flash, state.doubleMode ? .22 : .13);
     state.shake = Math.max(state.shake, state.doubleMode ? 2.4 : 1.1);
 
-    const newBpm = Math.min(220, 108 + state.score * .23 + (state.doubleMode ? 18 : 0));
-    state.bpm = lerp(state.bpm, newBpm, .12);
+    const newBpm = Math.min(205, 108 + state.score * .17 + (state.doubleMode ? 14 : 0));
+    state.bpm = lerp(state.bpm, newBpm, .10);
     state.beatMs = 60000 / state.bpm;
     state.nextBeatAt = now + state.beatMs;
 
@@ -235,40 +260,56 @@
       toast(labels[state.score]);
     }
 
-    if (!state.choiceActive && state.score >= 48 && state.score % 64 < state.multiplier) startChoice(now);
-
-    resolveObstacle();
-    if (state.mode !== 'playing') return;
-    state.obstacle = state.nextObstacle;
-    state.nextObstacle = generateObstacle(2);
+    const choiceDue = !state.choiceActive && state.score >= 48 && state.score % 64 < state.multiplier;
+    state.pendingResolution = {
+      obstacle: state.obstacle,
+      beat: state.beatIndex,
+      beatAt: now,
+      resolveAt: now + inputGraceMs(),
+      choiceDue
+    };
     updateUI();
   }
 
-  function resolveObstacle() {
-    const o = state.obstacle;
+  function processPendingResolution(now) {
+    const pending = state.pendingResolution;
+    if (!pending || now < pending.resolveAt || state.mode !== 'playing') return;
+    state.pendingResolution = null;
+    resolveObstacle(pending.obstacle, pending.beat, pending.beatAt);
+    if (state.mode !== 'playing') return;
+
+    state.obstacle = state.nextObstacle;
+    state.nextObstacle = generateObstacle(2);
+
+    if (pending.choiceDue && !state.choiceActive) startChoice(now);
+    updateUI();
+  }
+
+  function resolveObstacle(o, targetBeat, beatAt) {
     if (!o || o.type === 'none') return;
-    const perfectWindow = Math.max(55, state.beatMs * .12);
-    const goodWindow = Math.max(105, state.beatMs * .23);
+    const perfectWindow = Math.max(70, state.beatMs * .12);
+    const goodWindow = Math.max(145, state.beatMs * .30);
     let ok = false;
     let perfect = false;
 
     if (o.type === 'switch') {
-      ok = state.lastActionType === 'tap' && state.lastActionBeat === state.beatIndex && state.actionError <= goodWindow;
+      ok = state.lastActionType === 'tap' && state.lastActionBeat === targetBeat && state.actionError <= goodWindow;
       perfect = ok && state.actionError <= perfectWindow;
     } else if (o.type === 'charge') {
-      const heldFor = performance.now() - state.holdStart;
-      ok = state.held && heldFor >= Math.min(150, state.beatMs * .3);
-      perfect = ok && heldFor >= Math.min(250, state.beatMs * .5);
+      const holdError = Math.abs(state.holdStart - beatAt);
+      ok = state.held;
+      perfect = ok && holdError <= perfectWindow;
     } else if (o.type === 'rest') {
-      ok = !state.held && state.lastActionBeat !== state.beatIndex;
+      ok = !state.held && state.lastPressBeat !== targetBeat;
       perfect = ok;
     }
 
     if (!ok) {
-      const hint = o.type === 'charge' ? 'HOLD THE WALL' : o.type === 'rest' ? 'WAIT MEANS WAIT' : 'TAP ON THE BEAT';
+      const hint = o.type === 'charge' ? 'HOLD THROUGH THE WALL' : o.type === 'rest' ? 'WAIT MEANS WAIT' : 'TAP AS IT HITS THE LINE';
       die(hint);
       return;
     }
+
     state.perfects += perfect ? 1 : 0;
     state.danger = clamp(state.danger - .08, 0, 1);
     audio.success(perfect);
@@ -278,6 +319,8 @@
 
   function startChoice(now) {
     state.choiceActive = true; state.choiceResolved = false; state.choiceStart = now; state.choiceHold = 0;
+    state.obstacle = { type: 'none', lane: 0, beat: state.beatIndex + 1 };
+    state.nextObstacle = { type: 'none', lane: 0, beat: state.beatIndex + 2 };
     ui.choice.classList.add('visible');
     toast('CHOOSE');
   }
@@ -300,7 +343,7 @@
 
   function die(reason) {
     if (state.mode !== 'playing') return;
-    state.mode = 'dead'; audio.fail(); navigator.vibrate?.([45, 40, 100]); state.shake = 14; state.flash = .8;
+    state.mode = 'dead'; state.pendingResolution = null; audio.fail(); navigator.vibrate?.([45, 40, 100]); state.shake = 14; state.flash = .8;
     const finalScore = state.score;
     if (finalScore > best) {
       best = finalScore; localStorage.setItem(STORAGE_KEY, String(best));
@@ -360,9 +403,16 @@
     state.particles = state.particles.filter(p => p.life > 0);
 
     if (state.mode !== 'playing') return;
+
     state.beatPhase = clamp((now - state.lastBeatAt) / state.beatMs, 0, 1);
+    processPendingResolution(now);
+    if (state.mode !== 'playing') return;
     resolveChoiceIfNeeded(now);
-    while (now >= state.nextBeatAt && state.mode === 'playing') resolveBeat(state.nextBeatAt);
+
+    while (now >= state.nextBeatAt && state.mode === 'playing') {
+      resolveBeat(state.nextBeatAt);
+      processPendingResolution(now);
+    }
   }
 
   function draw() {
@@ -518,9 +568,29 @@
     audio.ensure();
     if (state.mode === 'start') { resetRun(now); return; }
     if (state.mode === 'dead') { resetRun(now); return; }
+
     state.pressStart = now;
-    if (state.choiceActive) { state.choiceHold = now; setHold(true, now); return; }
+    state.pressHandledTap = false;
+    state.pressWasChoice = state.choiceActive;
+
+    if (state.choiceActive) {
+      state.choiceHold = now;
+      setHold(true, now);
+      return;
+    }
+
+    state.pressBeat = actionBeat(now);
+    state.pressError = timingError(now);
+    state.lastPressBeat = state.pressBeat;
+    const expected = obstacleForBeat(state.pressBeat);
+    state.pressExpectedType = expected?.type || 'none';
+
     setHold(true, now);
+
+    if (state.pressExpectedType === 'switch') {
+      handleTap(now, state.pressBeat, state.pressError);
+      state.pressHandledTap = true;
+    }
   }
 
   function pointerUp(e) {
@@ -528,9 +598,28 @@
     const now = performance.now();
     if (state.mode !== 'playing') return;
     const duration = now - state.pressStart;
-    const wasChoice = state.choiceActive;
+    const wasChoice = state.pressWasChoice;
+    const expectedType = state.pressExpectedType;
+    const handledTap = state.pressHandledTap;
+
     setHold(false, now);
-    if (!wasChoice && duration < Math.min(190, state.beatMs * .34)) handleTap(now);
+
+    if (!wasChoice && !handledTap && expectedType !== 'charge' && expectedType !== 'rest' && duration <= tapMaxMs()) {
+      handleTap(now, state.pressBeat, state.pressError);
+    }
+
+    state.pressWasChoice = false;
+    state.pressHandledTap = false;
+    state.pressExpectedType = 'none';
+  }
+
+  function pointerCancel(e) {
+    e.preventDefault();
+    if (state.mode !== 'playing') return;
+    state.held = false;
+    state.pressWasChoice = false;
+    state.pressHandledTap = false;
+    state.pressExpectedType = 'none';
   }
 
   ui.startButton.addEventListener('click', (e) => { e.stopPropagation(); resetRun(performance.now()); });
@@ -538,7 +627,7 @@
   ui.mute.addEventListener('click', (e) => { e.stopPropagation(); audio.ensure(); audio.setMuted(!muted); });
   canvas.addEventListener('pointerdown', pointerDown, { passive: false });
   canvas.addEventListener('pointerup', pointerUp, { passive: false });
-  canvas.addEventListener('pointercancel', pointerUp, { passive: false });
+  canvas.addEventListener('pointercancel', pointerCancel, { passive: false });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   document.addEventListener('keydown', (e) => {
     if (e.code !== 'Space') return;
