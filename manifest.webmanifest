@@ -1,0 +1,13 @@
+{
+  "name": "ONE MORE BEAT",
+  "short_name": "ONE MORE BEAT",
+  "description": "Survive the rhythm. Miss one beat and the run is over.",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#05050a",
+  "theme_color": "#05050a",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
