@@ -38,10 +38,11 @@ jobs:
         id: npm
         run: npm install --no-audit --no-fund
 
-      - name: Prepare web bundle
+      - name: Prepare and validate web bundle
         id: web
         run: |
           set -euxo pipefail
+          node --check game.js
           rm -rf dist android
           mkdir -p dist/icons
           cp index.html styles.css game.js manifest.webmanifest sw.js dist/
@@ -57,6 +58,21 @@ jobs:
       - name: Sync web assets
         id: capsync
         run: npx cap sync android
+
+      - name: Install stable debug signing key
+        id: signing
+        run: |
+          set -euxo pipefail
+          test "$(wc -c < .github/one-more-beat-debug.keystore.b64)" -eq 1800
+          test "$(wc -c < .github/one-more-beat-debug.keystore.b64.part2)" -eq 1756
+          cat .github/one-more-beat-debug.keystore.b64 .github/one-more-beat-debug.keystore.b64.part2 > /tmp/one-more-beat-debug.keystore.b64
+          test "$(wc -c < /tmp/one-more-beat-debug.keystore.b64)" -eq 3556
+          echo "a8eb2cb1f7518de69f6f464bac5233379ca155e506ebb4e4358d563246d6369d  /tmp/one-more-beat-debug.keystore.b64" | sha256sum -c -
+          mkdir -p "$HOME/.android"
+          base64 --decode /tmp/one-more-beat-debug.keystore.b64 > "$HOME/.android/debug.keystore"
+          test "$(wc -c < "$HOME/.android/debug.keystore")" -eq 2666
+          echo "da955c94375e64680f4742804c5304a19e8c8701054403b67b8d5ce71a582711  $HOME/.android/debug.keystore" | sha256sum -c -
+          keytool -list -storetype PKCS12 -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey
 
       - name: Build debug APK
         id: gradle
@@ -106,6 +122,7 @@ jobs:
           WEB: ${{ steps.web.outcome }}
           CAPADD: ${{ steps.capadd.outcome }}
           CAPSYNC: ${{ steps.capsync.outcome }}
+          SIGNING: ${{ steps.signing.outcome }}
           GRADLE: ${{ steps.gradle.outcome }}
           VERIFY: ${{ steps.verify.outcome }}
           ARTIFACT: ${{ steps.artifact.outcome }}
@@ -124,6 +141,7 @@ jobs:
           prepare_web=$WEB
           capacitor_add_android=$CAPADD
           capacitor_sync=$CAPSYNC
+          stable_debug_signing=$SIGNING
           gradle_build=$GRADLE
           verify_apk=$VERIFY
           upload_artifact=$ARTIFACT
