@@ -1,6 +1,6 @@
 status=success
-commit=5e73b8cba5bacffb2fcf00b8da88d45a9b006bf1
-run_id=32685945338
+commit=662bff2e7ebdac1f1fb0ed89358d4a1f86e5065f
+run_id=32686870283
 checkout=success
 setup_node=success
 setup_java=success
@@ -8,6 +8,7 @@ npm_install=success
 prepare_web=success
 capacitor_add_android=success
 capacitor_sync=success
+stable_debug_signing=success
 gradle_build=success
 verify_apk=success
 upload_artifact=success
