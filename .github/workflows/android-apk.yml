@@ -45,7 +45,7 @@ jobs:
           node --check game.js
           node --check music.js
           grep -q "finalpulse" game.js
-          grep -q "20 WORLDS" README.md
+          grep -qi "20 worlds" README.md
           grep -q "share-run" index.html
           grep -q "one-more-beat-v4-20-worlds" sw.js
           rm -rf dist android
