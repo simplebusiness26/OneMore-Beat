@@ -43,6 +43,7 @@ jobs:
         run: |
           set -euxo pipefail
           python3 scripts/v2-fairness-hotfix.py
+          python3 scripts/remove-action-flashes.py
           node --check game.js
           node --check music.js
           rm -rf dist android
