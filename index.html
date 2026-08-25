@@ -15,76 +15,28 @@
 <body>
   <main id="app" aria-label="ONE MORE BEAT">
     <canvas id="game" aria-label="Rhythm survival game"></canvas>
-
     <section id="hud" class="hud" aria-live="polite">
       <div class="hud-left"><span id="score-label" class="eyebrow">BEATS</span><strong id="score">0</strong></div>
-      <div class="hud-center">
-        <span id="streak">READY</span>
-        <div class="beat-dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-        <span id="phrase" class="phrase-label">LOCK IN</span>
-      </div>
+      <div class="hud-center"><span id="streak">READY</span><div class="beat-dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div><span id="phrase" class="phrase-label">LOCK IN</span></div>
       <div class="hud-right"><span id="best-label" class="eyebrow">BEST</span><strong id="best">0</strong></div>
     </section>
-
-    <section id="challenge" class="challenge" aria-live="assertive">
-      <span id="challenge-kicker">CHALLENGE</span>
-      <strong id="challenge-name">HEARTBREAK</strong>
-      <small id="challenge-meta">8 BEATS</small>
-    </section>
-
+    <section id="challenge" class="challenge" aria-live="assertive"><span id="challenge-kicker">CHALLENGE</span><strong id="challenge-name">HEARTBREAK</strong><small id="challenge-meta">8 BEATS</small></section>
     <button id="menu-mini" class="icon-button menu-button hidden" type="button" aria-label="Return to menu">≡</button>
     <button id="mute" class="icon-button" type="button" aria-label="Toggle sound">♪</button>
 
     <section id="start" class="overlay visible">
-      <div class="title-lockup">
-        <p class="kicker">PLAY THE SONG · SURVIVE THE SONG</p>
-        <h1>ONE MORE<br><span>BEAT</span></h1>
-        <p id="start-best" class="best-line">BEST: 0</p>
-      </div>
-
-      <div class="mode-selector" role="group" aria-label="Game mode">
-        <button class="mode-chip selected" data-mode="endless" type="button">ENDLESS</button>
-        <button class="mode-chip" data-mode="daily" type="button">DAILY BEAT</button>
-        <button class="mode-chip" data-mode="practice" type="button">PRACTICE</button>
-      </div>
-
-      <div id="practice-options" class="practice-options hidden" role="group" aria-label="Practice pattern">
-        <button class="practice-chip" data-practice="tap" type="button">TAP</button>
-        <button class="practice-chip" data-practice="hold" type="button">HOLD</button>
-        <button class="practice-chip selected" data-practice="mix" type="button">MIX</button>
-        <button class="practice-chip" data-practice="hard" type="button">HARD</button>
-      </div>
-
-      <div class="start-tools">
-        <button id="theme-button" class="tool-chip" type="button">WORLD · AUTO</button>
-        <span id="unlock-summary">1/5 WORLDS</span>
-      </div>
-
-      <div class="instructions">
-        <p><b>TAP</b> the gate · <b>HOLD</b> through walls · <b>WAIT</b> on rings</p>
-        <p id="mode-detail">THE LONGER YOU LIVE, THE BIGGER THE TRACK GETS.</p>
-      </div>
-
-      <button id="start-button" class="primary" type="button">START ENDLESS</button>
-      <p class="micro">HEADPHONES ON · ONE FINGER · THE GAME IS THE MUSIC</p>
+      <div class="title-lockup"><p class="kicker">PLAY THE SONG · SURVIVE THE SONG</p><h1>ONE MORE<br><span>BEAT</span></h1><p id="start-best" class="best-line">BEST: 0</p></div>
+      <div class="mode-selector" role="group" aria-label="Game mode"><button class="mode-chip selected" data-mode="endless" type="button">ENDLESS</button><button class="mode-chip" data-mode="daily" type="button">DAILY BEAT</button><button class="mode-chip" data-mode="practice" type="button">PRACTICE</button></div>
+      <div id="practice-options" class="practice-options hidden" role="group" aria-label="Practice pattern"><button class="practice-chip" data-practice="tap" type="button">TAP</button><button class="practice-chip" data-practice="hold" type="button">HOLD</button><button class="practice-chip selected" data-practice="mix" type="button">MIX</button><button class="practice-chip" data-practice="hard" type="button">HARD</button></div>
+      <div class="start-tools"><button id="theme-button" class="tool-chip" type="button">WORLD · AUTO</button><button id="haptics-button" class="tool-chip" type="button">HAPTICS · ON</button><span id="unlock-summary">1/20 WORLDS</span></div>
+      <div id="tutorial-prompt" class="tutorial-prompt"><div><strong>FIRST RUN?</strong><small>Three tiny playable lessons. Then the words disappear.</small></div><button id="tutorial-button" class="secondary" type="button">PLAY TUTORIAL</button></div>
+      <div class="instructions"><p><b>DIAMOND</b> = tap · <b>WALL</b> = hold · <b>RING</b> = wait</p><p id="mode-detail">20 WORLDS · FULL SONG STRUCTURE · CHALLENGES · ADAPTIVE PHRASES</p></div>
+      <button id="start-button" class="primary" type="button">START ENDLESS</button><p class="micro">HEADPHONES ON · ONE FINGER · THE GAME IS THE MUSIC</p>
     </section>
 
-    <section id="death" class="overlay death">
-      <div class="death-card">
-        <p id="death-mode" class="kicker">RUN ENDED</p>
-        <h2 id="death-score">0 BEATS</h2>
-        <p id="death-best">BEST: 0</p>
-        <div id="death-rank" class="rank">ONE MORE</div>
-        <button id="retry-button" class="primary" type="button">ONE MORE?</button>
-        <button id="death-menu" class="secondary" type="button">MENU</button>
-      </div>
-    </section>
-
-    <section id="choice" class="choice" aria-live="assertive">
-      <div><span>SAFE</span><small>do nothing</small></div>
-      <div class="danger"><span>DOUBLE OR NOTHING</span><small>hold to enter ×2</small></div>
-    </section>
-
+    <section id="death" class="overlay death"><div class="death-card"><p id="death-mode" class="kicker">RUN ENDED</p><h2 id="death-score">0 BEATS</h2><p id="death-best">BEST: 0</p><div id="death-rank" class="rank">ONE MORE</div><button id="retry-button" class="primary" type="button">ONE MORE?</button><div class="death-actions"><button id="share-run" class="secondary" type="button">SHARE RUN</button><button id="death-menu" class="secondary" type="button">MENU</button></div></div></section>
+    <section id="choice" class="choice" aria-live="assertive"><div><span>SAFE</span><small>do nothing</small></div><div class="danger"><span>DOUBLE OR NOTHING</span><small>hold to enter ×2</small></div></section>
+    <section id="world-panel" class="world-panel" aria-label="World selector"><div class="world-sheet"><div class="world-sheet-head"><div><span>SELECT WORLD</span><strong>20 SIGNALS</strong></div><button id="world-close" type="button">×</button></div><div id="world-grid" class="world-grid"></div><p>AUTO changes world as the run gets deeper. Locked worlds unlock from your best survival distance.</p></div></section>
     <div id="toast" class="toast" aria-live="polite"></div>
   </main>
   <script src="game.js"></script>
