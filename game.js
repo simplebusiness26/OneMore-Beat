@@ -1,556 +1,207 @@
 (() => {
   'use strict';
 
-  const $ = (id) => document.getElementById(id);
+  const $ = id => document.getElementById(id);
   const canvas = $('game');
   const ctx = canvas.getContext('2d', { alpha: false });
   const ui = {
-    score: $('score'), scoreLabel: $('score-label'), best: $('best'), bestLabel: $('best-label'), streak: $('streak'), phrase: $('phrase'),
-    start: $('start'), startBest: $('start-best'), startButton: $('start-button'), modeDetail: $('mode-detail'),
-    practiceOptions: $('practice-options'), themeButton: $('theme-button'), unlockSummary: $('unlock-summary'),
-    death: $('death'), deathMode: $('death-mode'), deathScore: $('death-score'), deathBest: $('death-best'), deathRank: $('death-rank'),
-    retryButton: $('retry-button'), deathMenu: $('death-menu'), choice: $('choice'), toast: $('toast'), mute: $('mute'), menuMini: $('menu-mini'),
-    challenge: $('challenge'), challengeKicker: $('challenge-kicker'), challengeName: $('challenge-name'), challengeMeta: $('challenge-meta'),
-    modeChips: [...document.querySelectorAll('.mode-chip')], practiceChips: [...document.querySelectorAll('.practice-chip')],
-    dots: [...document.querySelectorAll('.beat-dots i')]
+    score:$('score'), scoreLabel:$('score-label'), best:$('best'), bestLabel:$('best-label'), streak:$('streak'), phrase:$('phrase'),
+    start:$('start'), startBest:$('start-best'), startButton:$('start-button'), modeDetail:$('mode-detail'), practiceOptions:$('practice-options'),
+    themeButton:$('theme-button'), unlockSummary:$('unlock-summary'), hapticsButton:$('haptics-button'), tutorialButton:$('tutorial-button'), tutorialPrompt:$('tutorial-prompt'),
+    death:$('death'), deathMode:$('death-mode'), deathScore:$('death-score'), deathBest:$('death-best'), deathRank:$('death-rank'), retryButton:$('retry-button'), deathMenu:$('death-menu'), shareRun:$('share-run'),
+    choice:$('choice'), toast:$('toast'), mute:$('mute'), menuMini:$('menu-mini'), challenge:$('challenge'), challengeKicker:$('challenge-kicker'), challengeName:$('challenge-name'), challengeMeta:$('challenge-meta'),
+    worldPanel:$('world-panel'), worldGrid:$('world-grid'), worldClose:$('world-close'),
+    modeChips:[...document.querySelectorAll('.mode-chip')], practiceChips:[...document.querySelectorAll('.practice-chip')], dots:[...document.querySelectorAll('.beat-dots i')]
   };
 
-  const STORAGE_KEY = 'one-more-beat-best-v1';
-  const SETTINGS_KEY = 'one-more-beat-settings-v1';
-  const PROGRESS_KEY = 'one-more-beat-progress-v2';
-  const TAU = Math.PI * 2;
-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-  const lerp = (a, b, t) => a + (b - a) * t;
-  const rand = (a, b) => a + Math.random() * (b - a);
-  const emit = (name, detail = {}) => window.dispatchEvent(new CustomEvent(`omb:${name}`, { detail }));
+  const STORAGE_KEY='one-more-beat-best-v1';
+  const SETTINGS_KEY='one-more-beat-settings-v1';
+  const PROGRESS_KEY='one-more-beat-progress-v3';
+  const LEGACY_PROGRESS_KEY='one-more-beat-progress-v2';
+  const TAU=Math.PI*2;
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  const rand=(a,b)=>a+Math.random()*(b-a);
+  const emit=(name,detail={})=>window.dispatchEvent(new CustomEvent(`omb:${name}`,{detail}));
+  const hexA=(hex,a)=>`${hex}${Math.round(clamp(a,0,1)*255).toString(16).padStart(2,'0')}`;
 
-  const THEMES = {
-    neon: { id:'neon', name:'NEON HEART', accent:'#49f8ff', secondary:'#ff3bd4', danger:'#ff3f59', bg0:'#111f3b', bg1:'#070812', star:'#7defff', trail:'#49f8ff' },
-    pulse: { id:'pulse', name:'PULSE MACHINE', accent:'#61ff8b', secondary:'#49f8ff', danger:'#ff4d78', bg0:'#0d3025', bg1:'#06100d', star:'#8dffb0', trail:'#61ff8b' },
-    afterburn: { id:'afterburn', name:'AFTERBURN', accent:'#ffad42', secondary:'#ff4d79', danger:'#ff3148', bg0:'#3a1607', bg1:'#120704', star:'#ffd08c', trail:'#ff9a2f' },
-    blackout: { id:'blackout', name:'BLACKOUT', accent:'#f5f7ff', secondary:'#8c6cff', danger:'#ff315b', bg0:'#111116', bg1:'#020203', star:'#d8dcff', trail:'#a99cff' },
-    redline: { id:'redline', name:'REDLINE', accent:'#ff3f59', secondary:'#ff8f2f', danger:'#ff1738', bg0:'#3c0710', bg1:'#100205', star:'#ff788a', trail:'#ff3f59' }
+  const WORLD_ORDER=['neon','pulse','afterburn','blackout','redline','static','glass','night','volt','laser','subzero','heatwave','void','chrome','starcrash','hypercoil','fracture','eclipse','supernova','finalpulse'];
+  const WORLDS={
+    neon:{name:'NEON HEART',accent:'#49f8ff',secondary:'#ff3bd4',danger:'#ff3f59',bg0:'#111f3b',bg1:'#070812',star:'#7defff',trail:'#49f8ff',style:0,unlock:0},
+    pulse:{name:'PULSE MACHINE',accent:'#61ff8b',secondary:'#49f8ff',danger:'#ff4d78',bg0:'#0d3025',bg1:'#06100d',star:'#8dffb0',trail:'#61ff8b',style:1,unlock:25},
+    afterburn:{name:'AFTERBURN',accent:'#ffad42',secondary:'#ff4d79',danger:'#ff3148',bg0:'#3a1607',bg1:'#120704',star:'#ffd08c',trail:'#ff9a2f',style:2,unlock:50},
+    blackout:{name:'BLACKOUT',accent:'#f5f7ff',secondary:'#8c6cff',danger:'#ff315b',bg0:'#111116',bg1:'#020203',star:'#d8dcff',trail:'#a99cff',style:3,unlock:75},
+    redline:{name:'REDLINE',accent:'#ff3f59',secondary:'#ff8f2f',danger:'#ff1738',bg0:'#3c0710',bg1:'#100205',star:'#ff788a',trail:'#ff3f59',style:4,unlock:100},
+    static:{name:'STATIC BLOOM',accent:'#d9ff4f',secondary:'#a965ff',danger:'#ff4f72',bg0:'#25320b',bg1:'#090d03',star:'#efffa8',trail:'#d9ff4f',style:0,unlock:125},
+    glass:{name:'GLASS CIRCUIT',accent:'#baf7ff',secondary:'#74a8ff',danger:'#ff6b9d',bg0:'#102c35',bg1:'#041014',star:'#d8fbff',trail:'#8feeff',style:1,unlock:150},
+    night:{name:'NIGHT DRIVE',accent:'#7b7dff',secondary:'#ff4fd8',danger:'#ff556d',bg0:'#111537',bg1:'#04050f',star:'#a6a7ff',trail:'#7b7dff',style:2,unlock:175},
+    volt:{name:'VOLT TEMPLE',accent:'#ffe14f',secondary:'#42f5ce',danger:'#ff4c4c',bg0:'#332a07',bg1:'#0d0b02',star:'#fff29a',trail:'#ffe14f',style:3,unlock:200},
+    laser:{name:'LASER RAIN',accent:'#ff4fe1',secondary:'#43e7ff',danger:'#ff3b54',bg0:'#35102f',bg1:'#10040e',star:'#ff9ef1',trail:'#ff4fe1',style:4,unlock:225},
+    subzero:{name:'SUBZERO',accent:'#7ddfff',secondary:'#d4f7ff',danger:'#9a6bff',bg0:'#0b2740',bg1:'#02101c',star:'#c7f3ff',trail:'#7ddfff',style:0,unlock:250},
+    heatwave:{name:'HEATWAVE',accent:'#ff7a3d',secondary:'#ffd24a',danger:'#ff2855',bg0:'#3a1608',bg1:'#130602',star:'#ffc28b',trail:'#ff7a3d',style:1,unlock:275},
+    void:{name:'VOID SIGNAL',accent:'#b078ff',secondary:'#6a75ff',danger:'#ff4775',bg0:'#1c0d31',bg1:'#050208',star:'#caa9ff',trail:'#a16cff',style:2,unlock:300},
+    chrome:{name:'CHROME FEVER',accent:'#e7edf2',secondary:'#53e3ff',danger:'#ff556a',bg0:'#222a31',bg1:'#07090b',star:'#ffffff',trail:'#d5e0e7',style:3,unlock:325},
+    starcrash:{name:'STARCRASH',accent:'#ffdc6a',secondary:'#ff68ae',danger:'#ff344f',bg0:'#30200b',bg1:'#0d0702',star:'#fff0af',trail:'#ffdc6a',style:4,unlock:350},
+    hypercoil:{name:'HYPERCOIL',accent:'#58ffbf',secondary:'#65a7ff',danger:'#ff4d81',bg0:'#0b3124',bg1:'#03100c',star:'#9dffd9',trail:'#58ffbf',style:0,unlock:375},
+    fracture:{name:'FRACTURE',accent:'#ff74f2',secondary:'#8d6dff',danger:'#ff3857',bg0:'#361031',bg1:'#10040e',star:'#ffb0f7',trail:'#ff74f2',style:1,unlock:400},
+    eclipse:{name:'ECLIPSE',accent:'#f3f0d8',secondary:'#ff984f',danger:'#ff3156',bg0:'#24231b',bg1:'#050504',star:'#fffce5',trail:'#e8e3c7',style:2,unlock:425},
+    supernova:{name:'SUPERNOVA',accent:'#ffb04a',secondary:'#ff4fd1',danger:'#ff243f',bg0:'#3a2209',bg1:'#120704',star:'#ffd49b',trail:'#ff9f34',style:3,unlock:450},
+    finalpulse:{name:'FINAL PULSE',accent:'#ffffff',secondary:'#49f8ff',danger:'#ff2e4c',bg0:'#1b1d27',bg1:'#020205',star:'#ffffff',trail:'#ffffff',style:4,unlock:500}
   };
-  const THEME_ORDER = ['auto','neon','pulse','afterburn','blackout','redline'];
 
-  const PHRASES = {
-    easy: [
-      { name:'HEARTLINE', seq:['none','tap','none','rest','none','tap','none','charge'] },
-      { name:'LOCKSTEP', seq:['tap','none','tap','rest','none','charge','none','rest'] },
-      { name:'BREATHE', seq:['none','tap','rest','none','charge','none','tap','rest'] }
+  const PHRASES={
+    recovery:[
+      {name:'RESET',seq:['none','tap','none','rest','none','none','charge','rest']},
+      {name:'AIRLOCK',seq:['none','rest','tap','none','none','charge','none','rest']},
+      {name:'BREATHE EASY',seq:['none','tap','none','none','rest','none','charge','none']}
     ],
-    medium: [
-      { name:'PULSE CUT', seq:['tap','rest','tap','charge','none','tap','rest','charge'] },
-      { name:'CIRCUIT', seq:['charge','none','tap','rest','tap','none','charge','tap'] },
-      { name:'SYNC LINE', seq:['tap','tap','none','rest','charge','none','tap','rest'] }
+    easy:[
+      {name:'HEARTLINE',seq:['none','tap','none','rest','none','tap','none','charge']},
+      {name:'LOCKSTEP',seq:['tap','none','tap','rest','none','charge','none','rest']},
+      {name:'BREATHE',seq:['none','tap','rest','none','charge','none','tap','rest']},
+      {name:'LOW VOLTAGE',seq:['tap','none','rest','tap','none','charge','none','rest']},
+      {name:'ECHO STEP',seq:['none','tap','none','tap','rest','none','charge','none']},
+      {name:'SOFT SIGNAL',seq:['rest','none','tap','none','charge','none','tap','none']},
+      {name:'TWIN LIGHTS',seq:['tap','none','tap','none','rest','none','charge','rest']},
+      {name:'OPEN CIRCUIT',seq:['none','charge','none','rest','tap','none','tap','rest']}
     ],
-    hard: [
-      { name:'RED SHIFT', seq:['charge','tap','rest','tap','charge','rest','tap','tap'] },
-      { name:'AFTERIMAGE', seq:['tap','rest','tap','tap','charge','tap','rest','charge'] },
-      { name:'NO BRAKES', seq:['tap','charge','tap','rest','tap','tap','charge','rest'] }
+    medium:[
+      {name:'PULSE CUT',seq:['tap','rest','tap','charge','none','tap','rest','charge']},
+      {name:'CIRCUIT',seq:['charge','none','tap','rest','tap','none','charge','tap']},
+      {name:'SYNC LINE',seq:['tap','tap','none','rest','charge','none','tap','rest']},
+      {name:'CROSSFADE',seq:['tap','none','charge','tap','rest','tap','none','charge']},
+      {name:'VOLT RUN',seq:['charge','tap','none','rest','tap','charge','none','tap']},
+      {name:'BASS CUT',seq:['tap','rest','charge','none','tap','tap','rest','charge']},
+      {name:'HALF TIME',seq:['rest','tap','charge','tap','none','rest','tap','charge']},
+      {name:'EIGHTH WIRE',seq:['tap','tap','rest','none','charge','tap','none','charge']},
+      {name:'GLASS STEP',seq:['none','charge','tap','rest','tap','tap','none','rest']},
+      {name:'NIGHT SHIFT',seq:['tap','rest','tap','none','charge','tap','charge','rest']}
+    ],
+    hard:[
+      {name:'RED SHIFT',seq:['charge','tap','rest','tap','charge','rest','tap','tap']},
+      {name:'AFTERIMAGE',seq:['tap','rest','tap','tap','charge','tap','rest','charge']},
+      {name:'NO BRAKES',seq:['tap','charge','tap','rest','tap','tap','charge','rest']},
+      {name:'FRACTURE LINE',seq:['tap','tap','charge','rest','charge','tap','rest','tap']},
+      {name:'STATIC RUSH',seq:['charge','tap','tap','rest','tap','charge','tap','rest']},
+      {name:'VOID WALK',seq:['rest','tap','charge','tap','tap','rest','charge','tap']},
+      {name:'LASER LOCK',seq:['tap','charge','rest','tap','tap','charge','rest','tap']},
+      {name:'OVERHEAT',seq:['charge','tap','charge','rest','tap','tap','rest','charge']},
+      {name:'CHROME CUT',seq:['tap','rest','charge','tap','charge','tap','rest','tap']},
+      {name:'STAR FALL',seq:['tap','tap','rest','charge','tap','charge','rest','tap']},
+      {name:'HYPER STEP',seq:['tap','charge','tap','tap','rest','charge','tap','rest']},
+      {name:'FINAL WIRE',seq:['charge','tap','tap','charge','rest','tap','charge','rest']}
+    ],
+    elite:[
+      {name:'ZERO MERCY',seq:['tap','charge','tap','rest','charge','tap','tap','rest']},
+      {name:'PHASE BURN',seq:['charge','tap','rest','tap','tap','charge','tap','rest']},
+      {name:'WHITE NOISE',seq:['tap','tap','charge','tap','rest','charge','tap','rest']},
+      {name:'LAST SIGNAL',seq:['charge','tap','tap','rest','charge','tap','rest','tap']},
+      {name:'MACHINE HEART',seq:['tap','charge','tap','tap','rest','tap','charge','rest']},
+      {name:'DEAD AIR',seq:['rest','tap','charge','tap','rest','tap','charge','tap']}
     ]
   };
-  const BOSSES = [
-    { name:'HEARTBREAK', seq:['tap','tap','rest','charge','tap','rest','tap','charge'] },
-    { name:'OVERDRIVE TEST', seq:['tap','charge','tap','rest','tap','tap','charge','rest'] },
-    { name:'BLACKOUT', seq:['rest','tap','charge','tap','rest','charge','tap','tap'] },
-    { name:'AFTERBURN', seq:['tap','tap','charge','rest','tap','charge','tap','rest'] },
-    { name:'REDLINE', seq:['charge','tap','tap','rest','tap','charge','rest','tap'] }
+
+  const WORLD_SIGNATURES={
+    neon:['tap','none','tap','rest','none','charge','tap','rest'],pulse:['tap','tap','none','rest','charge','tap','none','rest'],afterburn:['tap','charge','tap','none','tap','rest','charge','tap'],blackout:['rest','tap','charge','none','rest','tap','charge','tap'],redline:['tap','charge','tap','rest','tap','tap','charge','rest'],
+    static:['tap','rest','tap','tap','none','charge','rest','tap'],glass:['charge','none','tap','rest','tap','none','tap','charge'],night:['tap','none','rest','tap','charge','none','tap','rest'],volt:['charge','tap','none','tap','rest','charge','tap','none'],laser:['tap','tap','charge','rest','tap','none','charge','tap'],
+    subzero:['rest','tap','none','charge','tap','rest','tap','none'],heatwave:['tap','charge','tap','rest','charge','tap','none','tap'],void:['rest','tap','charge','tap','none','charge','rest','tap'],chrome:['tap','none','charge','tap','rest','tap','tap','charge'],starcrash:['tap','tap','rest','charge','tap','charge','rest','tap'],
+    hypercoil:['charge','tap','tap','none','rest','tap','charge','tap'],fracture:['tap','charge','rest','tap','charge','tap','rest','tap'],eclipse:['rest','tap','none','charge','rest','tap','charge','tap'],supernova:['tap','tap','charge','rest','tap','charge','tap','rest'],finalpulse:['charge','tap','tap','rest','tap','charge','rest','tap']
+  };
+
+  const CHALLENGES=[
+    {name:'HEARTBREAK',mechanic:'SWITCHBACK',seq:['tap','tap','rest','charge','tap','rest','tap','charge'],bpm:2},
+    {name:'WALLSTORM',mechanic:'HOLD PRESSURE',seq:['charge','tap','charge','rest','charge','tap','rest','charge'],bpm:1},
+    {name:'DEAD AIR',mechanic:'SILENCE TEST',seq:['rest','tap','rest','charge','rest','tap','charge','rest'],bpm:0},
+    {name:'OVERDRIVE TEST',mechanic:'RUSH',seq:['tap','charge','tap','rest','tap','tap','charge','rest'],bpm:5},
+    {name:'BLACKOUT',mechanic:'MEMORY PULSE',seq:['rest','tap','charge','tap','rest','charge','tap','tap'],bpm:2},
+    {name:'AFTERBURN',mechanic:'ACCELERATION',seq:['tap','tap','charge','rest','tap','charge','tap','rest'],bpm:6},
+    {name:'SYNC BREAK',mechanic:'SYNCOPATION',seq:['tap','rest','tap','charge','tap','rest','charge','tap'],bpm:3},
+    {name:'NO TOUCH',mechanic:'BREATH CONTROL',seq:['rest','rest','tap','charge','rest','tap','rest','charge'],bpm:0},
+    {name:'FRACTURE',mechanic:'CROSS CUT',seq:['charge','tap','rest','tap','charge','tap','rest','tap'],bpm:4},
+    {name:'REDLINE',mechanic:'NO BRAKES',seq:['charge','tap','tap','rest','tap','charge','rest','tap'],bpm:7}
   ];
-  const PRACTICE = {
-    tap: { name:'TAP CONTROL', seq:['none','tap','none','tap','rest','tap','none','tap'] },
-    hold: { name:'HOLD CONTROL', seq:['none','charge','none','rest','charge','none','rest','charge'] },
-    mix: { name:'CORE MIX', seq:['tap','none','charge','rest','tap','tap','none','charge'] },
-    hard: { name:'HARD PHRASE', seq:['tap','charge','tap','rest','tap','tap','charge','rest'] }
-  };
-  const SIGNATURES = {
-    neon:{name:'NEON HEART',seq:['tap','none','tap','rest','none','charge','tap','rest']},
-    pulse:{name:'PULSE MACHINE',seq:['tap','tap','none','rest','charge','tap','none','rest']},
-    afterburn:{name:'AFTERBURN RUN',seq:['tap','charge','tap','none','tap','rest','charge','tap']},
-    blackout:{name:'DARK SIGNAL',seq:['rest','tap','charge','none','rest','tap','charge','tap']},
-    redline:{name:'REDLINE RUSH',seq:['tap','charge','tap','rest','tap','tap','charge','rest']}
-  };
 
-  function loadProgress() {
-    let data = {};
-    try { data = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}'); } catch (_) {}
-    const legacyBest = Number(localStorage.getItem(STORAGE_KEY) || 0);
-    return {
-      best: Math.max(legacyBest, Number(data.best || 0)), maxBeat: Number(data.maxBeat || 0), perfectTotal: Number(data.perfectTotal || 0),
-      maxPerfectStreak: Number(data.maxPerfectStreak || 0), doubleSurvives: Number(data.doubleSurvives || 0),
-      daily: data.daily && typeof data.daily === 'object' ? data.daily : {}, unlocks: Array.isArray(data.unlocks) ? data.unlocks : ['neon'],
-      selectedTheme: data.selectedTheme || 'auto'
-    };
-  }
+  const PRACTICE={tap:{name:'TAP CONTROL',seq:['none','tap','none','tap','rest','tap','none','tap']},hold:{name:'HOLD CONTROL',seq:['none','charge','none','rest','charge','none','rest','charge']},mix:{name:'CORE MIX',seq:['tap','none','charge','rest','tap','tap','none','charge']},hard:{name:'HARD PHRASE',seq:['tap','charge','tap','rest','tap','tap','charge','rest']}};
+  const TUTORIAL=[{name:'DIAMOND',label:'TAP THE DIAMOND',seq:['none','tap','none','tap']},{name:'WALL',label:'HOLD THROUGH THE WALL',seq:['none','charge','none','charge']},{name:'RING',label:'DO NOTHING ON THE RING',seq:['none','rest','none','rest']}];
 
-  let progress = loadProgress();
-  let selectedMode = 'endless';
-  let selectedPractice = 'mix';
-  let selectedTheme = THEME_ORDER.includes(progress.selectedTheme) ? progress.selectedTheme : 'auto';
-  let muted = false;
-  try { muted = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}').muted === true; } catch (_) {}
+  function loadSettings(){let s={};try{s=JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}')}catch(_){}return{muted:s.muted===true,haptics:s.haptics!==false,tutorialDone:s.tutorialDone===true}}
+  function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
+  function loadProgress(){let d={};try{d=JSON.parse(localStorage.getItem(PROGRESS_KEY)||localStorage.getItem(LEGACY_PROGRESS_KEY)||'{}')}catch(_){}const legacyBest=Number(localStorage.getItem(STORAGE_KEY)||0);return{best:Math.max(legacyBest,Number(d.best||0)),maxBeat:Number(d.maxBeat||0),perfectTotal:Number(d.perfectTotal||0),maxPerfectStreak:Number(d.maxPerfectStreak||0),doubleSurvives:Number(d.doubleSurvives||0),bossClears:Number(d.bossClears||0),daily:d.daily&&typeof d.daily==='object'?d.daily:{},unlocks:Array.isArray(d.unlocks)?d.unlocks:['neon'],selectedTheme:d.selectedTheme||'auto'}}
+  function saveProgress(){localStorage.setItem(PROGRESS_KEY,JSON.stringify(progress));localStorage.setItem(STORAGE_KEY,String(progress.best))}
+  const settings=loadSettings(),progress=loadProgress();let selectedMode='endless',selectedPractice='mix',selectedTheme=(progress.selectedTheme==='auto'||WORLD_ORDER.includes(progress.selectedTheme))?progress.selectedTheme:'auto';
 
-  const state = {
-    mode:'start', runMode:'endless', score:0, beatIndex:0, bpm:104, beatMs:60000/104, lastBeatAt:0, nextBeatAt:0, beatPhase:0,
-    multiplier:1, doubleMode:false, doubleUntilBeat:0, choiceActive:false, choiceStart:0, choiceEndBeat:0, choiceHoldAt:0, lastChoiceBeat:-999,
-    lane:0, laneVisual:0, held:false, pressBeat:-99, pressStarted:0, pressExpected:'none', input:new Map(), pending:[],
-    performance:.76, perfectStreak:0, runPerfects:0, runMaxPerfectStreak:0, bossClears:0,
-    phase:'intro', themeId:'neon', blockCache:new Map(), dailySeed:0,
-    stars:[], particles:[], trails:[], flash:0, shake:0, nearMiss:0, visualKick:0, visualSnare:0, visualBass:0, dropPulse:0,
-    practiceResetAt:0, messageTimer:0, runStartedAt:0
-  };
+  const state={mode:'start',runMode:'endless',score:0,beatIndex:0,bpm:104,beatMs:60000/104,lastBeatAt:0,nextBeatAt:0,beatPhase:0,multiplier:1,doubleMode:false,doubleUntilBeat:0,choiceActive:false,choiceEndBeat:0,choiceHoldAt:0,lastChoiceBeat:-999,lane:0,laneVisual:0,held:false,pressBeat:-99,pressStarted:0,pressExpected:'none',input:new Map(),pending:[],performance:.76,perfectStreak:0,runPerfects:0,runMaxPerfectStreak:0,bossClears:0,recoveryBlocks:0,phase:'intro',themeId:'neon',previousThemeId:'neon',worldTransition:0,blockCache:new Map(),dailySeed:0,stars:[],particles:[],trails:[],flash:0,shake:0,nearMiss:0,visualKick:0,visualSnare:0,visualBass:0,dropPulse:0,practiceResetAt:0,messageTimer:0,runStartedAt:0,lastRun:null,tutorialLesson:0,tutorialLessonStartBeat:0,tutorialMissed:false};
+  let W=0,H=0,DPR=1;
 
-  let W = 0, H = 0, DPR = 1;
+  function hashString(str){let h=2166136261>>>0;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+  function mulberry32(seed){return function(){let t=seed+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+  function dailyKey(){return new Date().toISOString().slice(0,10)}
+  function buzz(pattern){if(settings.haptics)navigator.vibrate?.(pattern)}
 
-  function hashString(str) {
-    let h = 2166136261 >>> 0;
-    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
-    return h >>> 0;
-  }
-  function mulberry32(seed) {
-    return function() { let t = seed += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
-  }
-  function dailyKey() { return new Date().toISOString().slice(0, 10); }
-  function saveProgress() {
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
-    localStorage.setItem(STORAGE_KEY, String(progress.best));
-  }
+  function refreshUnlocks(show=false){const before=new Set(progress.unlocks);for(const id of WORLD_ORDER){if(progress.maxBeat>=WORLDS[id].unlock&&!progress.unlocks.includes(id))progress.unlocks.push(id)}const added=progress.unlocks.filter(id=>!before.has(id));if(added.length){saveProgress();if(show){const id=added[added.length-1];toast(`UNLOCKED · ${WORLDS[id].name}`);emit('milestone',{kind:'unlock',themeId:id,name:WORLDS[id].name})}}ui.unlockSummary.textContent=`${progress.unlocks.length}/20 WORLDS`;if(added.length||ui.worldPanel?.classList.contains('visible'))renderWorldGrid()}
+  function renderWorldGrid(){if(!ui.worldGrid)return;ui.worldGrid.innerHTML='';const auto=document.createElement('button');auto.type='button';auto.className=`world-chip${selectedTheme==='auto'?' selected':''}`;auto.innerHTML='<span style="--chip:#ffffff"></span><strong>AUTO JOURNEY</strong><small>WORLD CHANGES WITH THE RUN</small>';auto.addEventListener('click',()=>{selectedTheme='auto';progress.selectedTheme='auto';saveProgress();ui.worldPanel.classList.remove('visible');updateMenu();renderWorldGrid()});ui.worldGrid.appendChild(auto);for(const id of WORLD_ORDER){const w=WORLDS[id],unlocked=progress.unlocks.includes(id),b=document.createElement('button');b.type='button';b.className=`world-chip${selectedTheme===id?' selected':''}${unlocked?'':' locked'}`;b.dataset.world=id;b.innerHTML=`<span style="--chip:${w.accent}"></span><strong>${w.name}</strong><small>${unlocked?'SELECT':`REACH ${w.unlock}`}</small>`;b.disabled=!unlocked;b.addEventListener('click',()=>{selectedTheme=id;progress.selectedTheme=id;saveProgress();ui.worldPanel.classList.remove('visible');updateMenu();renderWorldGrid()});ui.worldGrid.appendChild(b)}}
+  function openWorldPanel(){ui.worldPanel?.classList.add('visible');renderWorldGrid()}
+  function cycleHaptics(){settings.haptics=!settings.haptics;saveSettings();updateMenu();buzz(8)}
 
-  function refreshUnlocks(show = false) {
-    const before = new Set(progress.unlocks);
-    const unlock = (id) => { if (!progress.unlocks.includes(id)) progress.unlocks.push(id); };
-    unlock('neon');
-    if (progress.maxBeat >= 50) unlock('pulse');
-    if (progress.maxBeat >= 100) unlock('afterburn');
-    if (progress.perfectTotal >= 20 || progress.maxPerfectStreak >= 12) unlock('blackout');
-    if (progress.maxBeat >= 250 || progress.doubleSurvives >= 1) unlock('redline');
-    const added = progress.unlocks.filter(id => !before.has(id));
-    if (added.length) {
-      saveProgress();
-      if (show) {
-        const id = added[added.length - 1];
-        toast(`UNLOCKED · ${THEMES[id].name}`);
-        emit('milestone', { kind:'unlock', themeId:id, name:THEMES[id].name });
-      }
-    }
-    ui.unlockSummary.textContent = `${progress.unlocks.length}/5 WORLDS`;
-  }
+  function autoThemeForBeat(beat){return WORLD_ORDER[Math.min(WORLD_ORDER.length-1,Math.floor(Math.max(0,beat)/50))]}
+  function desiredTheme(){if(state.runMode==='daily')return WORLD_ORDER[state.dailySeed%WORLD_ORDER.length];return selectedTheme==='auto'?autoThemeForBeat(state.beatIndex):selectedTheme}
+  function applyTheme(id,announce=false){if(!WORLDS[id])id='neon';if(state.themeId===id&&!announce)return;state.previousThemeId=state.themeId;state.themeId=id;state.worldTransition=1;const t=WORLDS[id];document.documentElement.style.setProperty('--accent',t.accent);document.documentElement.style.setProperty('--secondary',t.secondary);document.documentElement.style.setProperty('--danger',t.danger);emit('theme',{themeId:id,name:t.name,previousThemeId:state.previousThemeId});if(announce&&state.mode==='playing'){toast(t.name);buzz([10,20,12])}}
 
-  function cycleTheme() {
-    const available = ['auto', ...THEME_ORDER.slice(1).filter(id => progress.unlocks.includes(id))];
-    let i = available.indexOf(selectedTheme);
-    selectedTheme = available[(i + 1) % available.length];
-    progress.selectedTheme = selectedTheme; saveProgress(); updateMenu();
-  }
+  function resize(){DPR=clamp(window.devicePixelRatio||1,1,2);W=window.innerWidth;H=window.innerHeight;canvas.width=Math.floor(W*DPR);canvas.height=Math.floor(H*DPR);canvas.style.width=`${W}px`;canvas.style.height=`${H}px`;ctx.setTransform(DPR,0,0,DPR,0,0);seedStars()}
+  function seedStars(){const count=Math.floor(W*H/8200);state.stars=Array.from({length:count},()=>({x:Math.random()*W,y:Math.random()*H,z:rand(.25,1),a:rand(.08,.48)}))}
+  function laneY(lane){const center=H*.54,gap=clamp(H*.17,82,138);return center+lane*gap*.5}
+  function playerX(){return clamp(W*.2,72,160)}function timingX(){return playerX()+16}function inputGraceMs(){return clamp(state.beatMs*.31,120,165)}function goodWindowMs(){return clamp(state.beatMs*.31,145,170)}function perfectWindowMs(){return clamp(state.beatMs*.14,68,82)}
 
-  function autoThemeForBeat(beat) {
-    if (beat >= 250) return 'redline';
-    if (beat >= 150) return 'blackout';
-    if (beat >= 100) return 'afterburn';
-    if (beat >= 50) return 'pulse';
-    return 'neon';
-  }
-  function desiredTheme() {
-    if (state.runMode === 'daily') {
-      const ids = ['neon','pulse','afterburn','blackout','redline'];
-      return ids[state.dailySeed % ids.length];
-    }
-    return selectedTheme === 'auto' ? autoThemeForBeat(state.beatIndex) : selectedTheme;
-  }
-  function applyTheme(id, announce = false) {
-    if (!THEMES[id]) id = 'neon';
-    if (state.themeId === id && !announce) return;
-    state.themeId = id;
-    const t = THEMES[id];
-    document.documentElement.style.setProperty('--accent', t.accent);
-    document.documentElement.style.setProperty('--secondary', t.secondary);
-    document.documentElement.style.setProperty('--danger', t.danger);
-    emit('theme', { themeId:id, name:t.name });
-    if (announce && state.mode === 'playing') toast(t.name);
-  }
+  function phaseForBeat(beat){if(beat<8)return'intro';const c=(beat-1)%64;if(c<16)return'verse';if(c<24)return'build';if(c===24)return'drop';if(c<40)return'drop-run';if(c<48)return'breakdown';if(c<56)return'build2';if(c===56)return'second-drop';return'second-drop-run'}
+  function intensityForBeat(beat){if(beat>=450)return 6;if(beat>=300)return 5;if(beat>=180)return 4;if(beat>=90)return 3;if(beat>=40)return 2;if(beat>=12)return 1;return 0}
+  function challengeInfoForBeat(beat){if(beat<50)return null;const start=Math.floor(beat/50)*50;if(start<50||beat<start||beat>start+7)return null;const idx=Math.floor(start/50)-1;return{challenge:CHALLENGES[idx%CHALLENGES.length],start,step:beat-start}}
+  function difficultyTier(beat){if(state.recoveryBlocks>0)return'recovery';const p=state.performance;if(beat>=300&&p>.82)return'elite';if(beat>=140||p>.91&&beat>70)return'hard';if(beat>=50||p>.86&&beat>28)return'medium';return'easy'}
+  function normalPhraseForBlock(startBeat){if(state.blockCache.has(startBeat))return state.blockCache.get(startBeat);const tier=difficultyTier(startBeat),pool=PHRASES[tier],world=desiredTheme();let phrase;if(state.runMode==='daily'){const rng=mulberry32((state.dailySeed^Math.imul(startBeat,2654435761))>>>0);phrase=startBeat>8&&rng()<.28?{name:WORLDS[world].name,seq:WORLD_SIGNATURES[world]}:pool[Math.floor(rng()*pool.length)]}else phrase=startBeat>8&&Math.random()<.28?{name:WORLDS[world].name,seq:WORLD_SIGNATURES[world]}:pool[Math.floor(Math.random()*pool.length)];state.blockCache.set(startBeat,phrase);if(tier==='recovery')state.recoveryBlocks=Math.max(0,state.recoveryBlocks-1);return phrase}
+  function descriptorForBeat(beat){if(state.choiceActive&&beat<=state.choiceEndBeat)return{type:'none',phrase:'CHOICE',step:0,length:1,boss:false};if(state.runMode==='tutorial'){const l=TUTORIAL[state.tutorialLesson]||TUTORIAL[2],step=Math.max(0,beat-state.tutorialLessonStartBeat-1)%4;return{type:l.seq[step],phrase:l.name,step,length:4,boss:false,tutorial:true}}if(state.runMode==='practice'){const p=PRACTICE[selectedPractice],step=(beat-1)%p.seq.length;return{type:p.seq[step],phrase:p.name,step,length:p.seq.length,boss:false}}const bi=challengeInfoForBeat(beat);if(bi)return{type:bi.challenge.seq[bi.step],phrase:bi.challenge.name,step:bi.step,length:8,boss:true,bossStart:bi.start,mechanic:bi.challenge.mechanic,bpmBoost:bi.challenge.bpm};const blockStart=Math.floor((beat-1)/8)*8+1,p=normalPhraseForBlock(blockStart),step=beat-blockStart;return{type:p.seq[step],phrase:p.name,step,length:p.seq.length,boss:false}}
 
-  function resize() {
-    DPR = clamp(window.devicePixelRatio || 1, 1, 2);
-    W = window.innerWidth; H = window.innerHeight;
-    canvas.width = Math.floor(W * DPR); canvas.height = Math.floor(H * DPR);
-    canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    seedStars();
-  }
-  function seedStars() {
-    const count = Math.floor((W * H) / 8500);
-    state.stars = Array.from({ length:count }, () => ({ x:Math.random()*W, y:Math.random()*H, z:rand(.25,1), a:rand(.08,.48) }));
-  }
-  function laneY(lane) { const center = H*.54; const gap = clamp(H*.17, 82, 138); return center + lane*gap*.5; }
-  function playerX() { return clamp(W*.2, 72, 160); }
-  function timingX() { return playerX()+16; }
-  function inputGraceMs() { return clamp(state.beatMs*.31, 120, 165); }
-  function goodWindowMs() { return clamp(state.beatMs*.31, 145, 170); }
-  function perfectWindowMs() { return clamp(state.beatMs*.14, 68, 82); }
+  function beatTimeFor(beat){const p=state.pending.find(x=>x.beat===beat);if(p)return p.beatAt;if(beat===state.beatIndex)return state.lastBeatAt;if(beat===state.beatIndex+1)return state.nextBeatAt;return state.nextBeatAt+(beat-state.beatIndex-1)*state.beatMs}function nearestBeat(now){return Math.abs(now-state.lastBeatAt)<=Math.abs(state.nextBeatAt-now)?state.beatIndex:state.beatIndex+1}function recordForBeat(beat){if(!state.input.has(beat))state.input.set(beat,{touched:false,downAt:null,upAt:null,tapAt:null});return state.input.get(beat)}
 
-  function phaseForBeat(beat) {
-    const cycle = beat % 50;
-    if (beat < 12) return 'intro';
-    if (beat >= 250) return cycle >= 42 ? 'build' : 'redline';
-    if (cycle >= 42 || cycle === 49) return 'build';
-    if (cycle === 0) return 'drop';
-    if (beat >= 100) return 'overdrive';
-    if (beat >= 50) return 'drive';
-    return 'groove';
-  }
-  function intensityForBeat(beat) {
-    if (beat >= 250) return 5;
-    if (beat >= 100) return 4;
-    if (beat >= 50) return 3;
-    if (beat >= 24) return 2;
-    if (beat >= 10) return 1;
-    return 0;
-  }
+  function resetRun(now,practiceRetry=false,overrideMode=null){state.mode='playing';state.runMode=overrideMode||selectedMode;state.score=0;state.beatIndex=0;state.bpm=state.runMode==='practice'?(selectedPractice==='hard'?122:98):state.runMode==='tutorial'?92:104;state.beatMs=60000/state.bpm;state.lastBeatAt=now;state.nextBeatAt=now+state.beatMs;state.beatPhase=0;state.multiplier=1;state.doubleMode=false;state.doubleUntilBeat=0;state.choiceActive=false;state.choiceHoldAt=0;state.lastChoiceBeat=-999;state.lane=0;state.laneVisual=0;state.held=false;state.pressBeat=-99;state.pressStarted=0;state.pressExpected='none';state.input.clear();state.pending=[];state.performance=.76;state.perfectStreak=0;state.runPerfects=0;state.runMaxPerfectStreak=0;state.bossClears=0;state.recoveryBlocks=0;state.phase='intro';state.blockCache.clear();state.flash=0;state.shake=0;state.nearMiss=0;state.dropPulse=0;state.practiceResetAt=0;state.particles=[];state.trails=[];state.worldTransition=0;state.runStartedAt=now;state.dailySeed=hashString(dailyKey());state.tutorialLesson=0;state.tutorialLessonStartBeat=0;state.tutorialMissed=false;ui.start.classList.remove('visible');ui.death.classList.remove('visible');ui.choice.classList.remove('visible');ui.challenge.classList.remove('visible');ui.worldPanel?.classList.remove('visible');ui.menuMini.classList.remove('hidden');applyTheme(desiredTheme());updateUI();updateChallenge();if(!practiceRetry)toast(state.runMode==='practice'?`${PRACTICE[selectedPractice].name} · PRACTICE`:state.runMode==='tutorial'?'LESSON 1 · DIAMOND':state.runMode==='daily'?'DAILY BEAT':'LOCK IN');emit('audio-unlock');emit('state',stateEventDetail('start'));buzz(14)}
+  function startTutorial(){resetRun(performance.now(),false,'tutorial')}function stateEventDetail(kind='update'){return{kind,mode:state.runMode,bpm:state.bpm,score:state.score,beatIndex:state.beatIndex,intensity:intensityForBeat(state.beatIndex),phase:state.phase,themeId:state.themeId,performance:state.performance,doubleMode:state.doubleMode}}
 
-  function bossInfoForBeat(beat) {
-    if (beat < 50) return null;
-    const start = Math.floor(beat / 50) * 50;
-    if (start < 50 || beat < start || beat > start + 7) return null;
-    const bossNo = Math.floor(start / 50) - 1;
-    return { boss:BOSSES[bossNo % BOSSES.length], start, step:beat-start };
-  }
+  function resolveBeat(beatAt){state.lastBeatAt=beatAt;state.beatIndex+=1;state.phase=phaseForBeat(state.beatIndex);const desc=descriptorForBeat(state.beatIndex),challengeBoost=desc.bpmBoost||0,perfEase=state.performance<.5?-5:state.performance>.93?3:0,base=state.runMode==='practice'?(selectedPractice==='hard'?122:98):state.runMode==='tutorial'?92:Math.min(212,104+state.beatIndex*.16+(state.doubleMode?11:0)+challengeBoost+perfEase);state.bpm=lerp(state.bpm,base,.09);state.beatMs=60000/state.bpm;state.nextBeatAt=beatAt+state.beatMs;state.pending.push({beat:state.beatIndex,beatAt,resolveAt:beatAt+inputGraceMs(),desc,heldAtBeat:state.held,holdStartedAt:state.held?state.pressStarted:null});state.visualKick=1;state.visualBass=intensityForBeat(state.beatIndex)>=1?1:.35;if(state.beatIndex%2===0)state.visualSnare=1;if(state.phase==='drop'||state.phase==='second-drop'){state.dropPulse=1;state.flash=1;state.shake=7;emit('milestone',{kind:'drop',beat:state.beatIndex,themeId:state.themeId,phase:state.phase});buzz([9,18,12])}if(settings.haptics&&state.beatIndex%4===0&&(state.phase==='drop-run'||state.phase==='second-drop-run'))buzz(4);const newTheme=desiredTheme();if(newTheme!==state.themeId)applyTheme(newTheme,true);updateChallenge();updateUI();ui.dots.forEach((d,i)=>d.classList.toggle('active',i===state.beatIndex%4));setTimeout(()=>ui.dots.forEach(d=>d.classList.remove('active')),70);emit('beat',{...stateEventDetail('beat'),target:desc.type,phrase:desc.phrase,phraseStep:desc.step,boss:desc.boss,mechanic:desc.mechanic||null});if(state.runMode==='endless'&&!state.choiceActive&&!state.doubleMode&&!challengeInfoForBeat(state.beatIndex)&&!challengeInfoForBeat(state.beatIndex+1)&&state.beatIndex>=72&&state.beatIndex-state.lastChoiceBeat>=104&&state.beatIndex%32===0)startChoice();if(state.doubleMode&&state.beatIndex>=state.doubleUntilBeat)endDouble()}
+  function processPending(now){const ready=state.pending.filter(p=>now>=p.resolveAt);state.pending=state.pending.filter(p=>now<p.resolveAt);for(const p of ready){if(state.mode!=='playing')break;evaluateBeat(p,now);state.input.delete(p.beat-2)}}
+  function evaluateBeat(p,now){const{desc,beat,beatAt}=p,rec=state.input.get(beat),good=goodWindowMs(),perfect=perfectWindowMs();let ok=true,quality='good',err=0;if(desc.type==='tap'){ok=!!rec?.tapAt;err=ok?Math.abs(rec.tapAt-beatAt):999;ok=ok&&err<=good;quality=err<=perfect?'perfect':err>=good*.72?'near':'good'}else if(desc.type==='charge'){if(rec?.downAt){const up=rec.upAt??now,overlap=rec.downAt<=beatAt+good&&up>=beatAt-55,heldFor=up-rec.downAt;ok=overlap&&heldFor>=clamp(state.beatMs*.13,55,80);err=Math.abs(rec.downAt-beatAt);quality=err<=perfect&&up>=beatAt+30?'perfect':err>=good*.72?'near':'good'}else if(p.heldAtBeat&&p.holdStartedAt){ok=true;err=Math.abs(p.holdStartedAt-beatAt);quality=err<=perfect?'perfect':'good'}else ok=false}else if(desc.type==='rest'){const restTouch=p.heldAtBeat||(rec?.downAt?Math.abs(rec.downAt-beatAt)<=good:false);ok=!restTouch;quality=ok?'perfect':'miss'}if(!ok){emit('result',{quality:'miss',target:desc.type,beat,bpm:state.bpm,themeId:state.themeId});if(state.runMode==='practice'){practiceMiss(desc);return}if(state.runMode==='tutorial'){tutorialMiss(desc,beat);return}die(desc.type==='charge'?'HOLD THROUGH THE WALL':desc.type==='rest'?'WAIT MEANS WAIT':'TAP AS IT HITS THE LINE');return}if(quality==='perfect'){state.performance=clamp(state.performance+.035,0,1);state.perfectStreak++;state.runPerfects++;state.runMaxPerfectStreak=Math.max(state.runMaxPerfectStreak,state.perfectStreak);if(state.runMode!=='practice'&&state.runMode!=='tutorial'){progress.perfectTotal++;progress.maxPerfectStreak=Math.max(progress.maxPerfectStreak,state.runMaxPerfectStreak)}burst(timingX(),laneY(state.lane===0?-1:1),WORLDS[state.themeId].accent,18,2.8);if(state.perfectStreak>0&&state.perfectStreak%8===0)toast(`PERFECT ×${state.perfectStreak}`)}else if(quality==='near'){state.performance=clamp(state.performance-.035,0,1);state.perfectStreak=0;state.nearMiss=1;state.shake=Math.max(state.shake,3.5);toast('CLOSE')}else{state.performance=clamp(state.performance+.006,0,1);state.perfectStreak=0}if(state.performance<.48&&state.runMode==='endless')state.recoveryBlocks=Math.max(state.recoveryBlocks,1);if(state.runMode!=='practice'&&state.runMode!=='tutorial'){state.score+=state.multiplier;progress.best=Math.max(progress.best,state.score);progress.maxBeat=Math.max(progress.maxBeat,beat);if(state.runMode==='daily')progress.daily[dailyKey()]=Math.max(Number(progress.daily[dailyKey()]||0),state.score);saveProgress();refreshUnlocks(true)}emit('result',{quality,target:desc.type,beat,error:err,bpm:state.bpm,themeId:state.themeId,performance:state.performance,perfectStreak:state.perfectStreak});if(desc.type==='rest'&&quality==='perfect')emit('input',{kind:'wait-success',beat,bpm:state.bpm,themeId:state.themeId});if(desc.boss&&desc.step===7){state.bossClears++;progress.bossClears=Math.max(progress.bossClears||0,state.bossClears);state.dropPulse=1;state.shake=9;toast(`${desc.phrase} · CLEARED`);emit('milestone',{kind:'boss-clear',name:desc.phrase,beat,themeId:state.themeId,mechanic:desc.mechanic});buzz([12,30,18]);saveProgress()}if(state.runMode==='tutorial'&&desc.step===3)advanceTutorial(beat);updateUI()}
 
-  function phrasePoolForBeat(beat) {
-    if (beat >= 150) return PHRASES.hard;
-    if (beat >= 55) return PHRASES.medium;
-    return PHRASES.easy;
-  }
-  function normalPhraseForBlock(startBeat) {
-    if (state.blockCache.has(startBeat)) return state.blockCache.get(startBeat);
-    const pool = phrasePoolForBeat(startBeat);
-    const world = desiredTheme();
-    let phrase;
-    if (state.runMode === 'daily') {
-      const rng = mulberry32((state.dailySeed ^ Math.imul(startBeat, 2654435761)) >>> 0);
-      phrase = startBeat > 8 && rng() < .28 ? SIGNATURES[world] : pool[Math.floor(rng()*pool.length)];
-    } else {
-      phrase = startBeat > 8 && Math.random() < .28 ? SIGNATURES[world] : pool[Math.floor(Math.random()*pool.length)];
-    }
-    state.blockCache.set(startBeat, phrase);
-    return phrase;
-  }
-  function descriptorForBeat(beat) {
-    if (state.choiceActive && beat <= state.choiceEndBeat) return { type:'none', phrase:'CHOICE', step:0, length:1, boss:false };
-    if (state.runMode === 'practice') {
-      const p = PRACTICE[selectedPractice]; const step = (beat-1) % p.seq.length;
-      return { type:p.seq[step], phrase:p.name, step, length:p.seq.length, boss:false };
-    }
-    const bi = bossInfoForBeat(beat);
-    if (bi) return { type:bi.boss.seq[bi.step], phrase:bi.boss.name, step:bi.step, length:8, boss:true, bossStart:bi.start };
-    const blockStart = Math.floor((beat-1)/8)*8+1;
-    const p = normalPhraseForBlock(blockStart); const step = beat-blockStart;
-    return { type:p.seq[step], phrase:p.name, step, length:p.seq.length, boss:false };
-  }
+  function tutorialMiss(desc,beat){state.nearMiss=1;state.shake=4;state.tutorialMissed=true;state.tutorialLessonStartBeat=beat;toast(`AGAIN · ${TUTORIAL[state.tutorialLesson].label}`);emit('milestone',{kind:'tutorial-miss',themeId:state.themeId})}function advanceTutorial(beat){if(state.tutorialMissed){state.tutorialMissed=false;state.tutorialLessonStartBeat=beat;return}state.tutorialLesson++;if(state.tutorialLesson>=TUTORIAL.length){settings.tutorialDone=true;saveSettings();toast('TRAINING COMPLETE');emit('milestone',{kind:'tutorial-clear',themeId:state.themeId});setTimeout(goMenu,500);return}state.tutorialLessonStartBeat=beat;toast(`LESSON ${state.tutorialLesson+1} · ${TUTORIAL[state.tutorialLesson].name}`);updateChallenge()}function practiceMiss(desc){state.nearMiss=1;state.shake=5;toast(`TRY AGAIN · ${desc.phrase}`);state.practiceResetAt=performance.now()+420}function restartPractice(now){const was=selectedMode;selectedMode='practice';resetRun(now,true);selectedMode=was;toast(`${PRACTICE[selectedPractice].name} · AGAIN`)}
+  function startChoice(){state.choiceActive=true;state.choiceEndBeat=state.beatIndex+4;state.choiceHoldAt=0;state.lastChoiceBeat=state.beatIndex;ui.choice.classList.add('visible');toast('CHOOSE');emit('milestone',{kind:'choice',themeId:state.themeId})}function acceptDouble(){if(!state.choiceActive)return;state.choiceActive=false;state.doubleMode=true;state.multiplier=2;state.doubleUntilBeat=state.beatIndex+24;ui.choice.classList.remove('visible');state.flash=1;state.shake=7;toast('DOUBLE OR NOTHING');emit('milestone',{kind:'double',themeId:state.themeId,bpm:state.bpm});buzz([10,25,10])}function endDouble(){state.doubleMode=false;state.multiplier=1;progress.doubleSurvives++;saveProgress();refreshUnlocks(true);toast('SURVIVED ×2');emit('milestone',{kind:'double-clear',themeId:state.themeId})}function updateChoice(now){if(!state.choiceActive)return;if(state.held&&state.choiceHoldAt&&now-state.choiceHoldAt>=Math.min(380,state.beatMs*.75))acceptDouble();if(state.beatIndex>=state.choiceEndBeat){state.choiceActive=false;state.choiceHoldAt=0;ui.choice.classList.remove('visible');toast('PLAY IT SAFE')}}
 
-  function beatTimeFor(beat) {
-    const p = state.pending.find(x => x.beat === beat);
-    if (p) return p.beatAt;
-    if (beat === state.beatIndex) return state.lastBeatAt;
-    if (beat === state.beatIndex + 1) return state.nextBeatAt;
-    return state.nextBeatAt + (beat - state.beatIndex - 1) * state.beatMs;
-  }
-  function nearestBeat(now) {
-    return Math.abs(now-state.lastBeatAt) <= Math.abs(state.nextBeatAt-now) ? state.beatIndex : state.beatIndex+1;
-  }
-  function recordForBeat(beat) {
-    if (!state.input.has(beat)) state.input.set(beat, { touched:false, downAt:null, upAt:null, tapAt:null });
-    return state.input.get(beat);
-  }
+  function updateChallenge(){if(state.runMode==='practice'){ui.challenge.classList.remove('visible');return}if(state.runMode==='tutorial'){const l=TUTORIAL[state.tutorialLesson];if(!l){ui.challenge.classList.remove('visible');return}ui.challengeKicker.textContent=`LESSON ${state.tutorialLesson+1}/3`;ui.challengeName.textContent=l.name;ui.challengeMeta.textContent=l.label;ui.challenge.classList.add('visible');return}const bi=challengeInfoForBeat(state.beatIndex);if(bi){ui.challengeKicker.textContent='CHALLENGE';ui.challengeName.textContent=bi.challenge.name;ui.challengeMeta.textContent=`${bi.step+1}/8 · ${bi.challenge.mechanic}`;ui.challenge.classList.add('visible');if(bi.step===0)emit('milestone',{kind:'boss-start',name:bi.challenge.name,beat:state.beatIndex,themeId:state.themeId,mechanic:bi.challenge.mechanic});return}const next=Math.ceil(Math.max(50,state.beatIndex+1)/50)*50,away=next-state.beatIndex;if(away>0&&away<=4){const c=CHALLENGES[(Math.floor(next/50)-1)%CHALLENGES.length];ui.challengeKicker.textContent='INCOMING';ui.challengeName.textContent=c.name;ui.challengeMeta.textContent=`${away} BEAT${away===1?'':'S'} · ${c.mechanic}`;ui.challenge.classList.add('visible')}else ui.challenge.classList.remove('visible')}
 
-  function resetRun(now, practiceRetry = false) {
-    state.mode = 'playing'; state.runMode = selectedMode; state.score = 0; state.beatIndex = 0;
-    state.bpm = state.runMode === 'practice' ? (selectedPractice === 'hard' ? 122 : 98) : 104;
-    state.beatMs = 60000/state.bpm; state.lastBeatAt = now; state.nextBeatAt = now + state.beatMs; state.beatPhase = 0;
-    state.multiplier=1; state.doubleMode=false; state.doubleUntilBeat=0; state.choiceActive=false; state.choiceHoldAt=0; state.lastChoiceBeat=-999;
-    state.lane=0; state.laneVisual=0; state.held=false; state.pressBeat=-99; state.pressStarted=0; state.pressExpected='none'; state.input.clear(); state.pending=[];
-    state.performance=.76; state.perfectStreak=0; state.runPerfects=0; state.runMaxPerfectStreak=0; state.bossClears=0;
-    state.phase='intro'; state.blockCache.clear(); state.flash=0; state.shake=0; state.nearMiss=0; state.dropPulse=0; state.practiceResetAt=0; state.particles=[]; state.trails=[];
-    state.runStartedAt=now; state.dailySeed=hashString(dailyKey());
-    ui.start.classList.remove('visible'); ui.death.classList.remove('visible'); ui.choice.classList.remove('visible'); ui.challenge.classList.remove('visible');
-    ui.menuMini.classList.remove('hidden');
-    applyTheme(desiredTheme()); updateUI();
-    if (!practiceRetry) toast(state.runMode === 'practice' ? `${PRACTICE[selectedPractice].name} · PRACTICE` : state.runMode === 'daily' ? 'DAILY BEAT' : 'LOCK IN');
-    emit('audio-unlock'); emit('state', stateEventDetail('start'));
-    navigator.vibrate?.(16);
-  }
+  function expectedForBeat(beat){const p=state.pending.find(x=>x.beat===beat);return p?p.desc:descriptorForBeat(beat)}function registerTap(beat,now,rec){const beatAt=beatTimeFor(beat),err=Math.abs(now-beatAt);if(err>goodWindowMs())return false;rec.tapAt=now;state.lane=state.lane===0?1:0;state.flash=Math.max(state.flash,.18);burst(playerX(),laneY(state.lane===0?-1:1),WORLDS[state.themeId].accent,8,1.8);buzz(6);emit('input',{kind:'tap',beat,error:err,bpm:state.bpm,themeId:state.themeId});return true}
+  function pointerDown(e){e.preventDefault();const now=performance.now();emit('audio-unlock');if(state.mode!=='playing')return;if(state.choiceActive){state.held=true;state.choiceHoldAt=now;return}const beat=nearestBeat(now),desc=expectedForBeat(beat),rec=recordForBeat(beat);rec.touched=true;rec.downAt=rec.downAt??now;rec.upAt=null;state.pressBeat=beat;state.pressStarted=now;state.pressExpected=desc.type;state.held=true;if(desc.type==='tap')registerTap(beat,now,rec);if(desc.type==='charge'){buzz(8);emit('input',{kind:'hold',beat,error:Math.abs(now-beatTimeFor(beat)),bpm:state.bpm,themeId:state.themeId})}}
+  function pointerUp(e){e.preventDefault();const now=performance.now();if(state.mode!=='playing')return;if(state.choiceActive){if(state.choiceHoldAt&&now-state.choiceHoldAt>=Math.min(380,state.beatMs*.75))acceptDouble();state.held=false;return}const beat=state.pressBeat,rec=state.input.get(beat);if(rec)rec.upAt=now;if(state.pressExpected==='charge')emit('input',{kind:'hold-release',beat,duration:Math.max(0,now-state.pressStarted),bpm:state.bpm,themeId:state.themeId});if(rec&&state.pressExpected==='none'&&now-state.pressStarted<=220)registerTap(beat,now,rec);state.held=false;state.pressBeat=-99;state.pressExpected='none'}function pointerCancel(e){e.preventDefault();const now=performance.now();if(state.pressBeat>-1){const rec=state.input.get(state.pressBeat);if(rec)rec.upAt=now}if(state.pressExpected==='charge')emit('input',{kind:'hold-release',beat:state.pressBeat,duration:Math.max(0,now-state.pressStarted),bpm:state.bpm,themeId:state.themeId});state.held=false;state.choiceHoldAt=0}
 
-  function stateEventDetail(kind='update') {
-    return { kind, mode:state.runMode, bpm:state.bpm, score:state.score, beatIndex:state.beatIndex, intensity:intensityForBeat(state.beatIndex),
-      phase:state.phase, themeId:state.themeId, performance:state.performance, doubleMode:state.doubleMode };
-  }
+  function die(reason){if(state.mode!=='playing')return;state.mode='dead';state.pending=[];state.held=false;ui.choice.classList.remove('visible');ui.challenge.classList.remove('visible');ui.menuMini.classList.add('hidden');state.lastRun={score:state.score,best:progress.best,mode:state.runMode,world:state.themeId,worldName:WORLDS[state.themeId].name,perfects:state.runPerfects,maxPerfect:state.runMaxPerfectStreak,bossClears:state.bossClears,rank:rankFor(state.score),date:dailyKey()};saveProgress();refreshUnlocks(false);emit('death',{reason,score:state.score,mode:state.runMode,themeId:state.themeId});buzz([25,20,45]);state.shake=13;state.flash=.7;setTimeout(()=>{ui.deathMode.textContent=state.runMode==='daily'?'DAILY RUN ENDED':'RUN ENDED';ui.deathScore.textContent=`${state.score} BEATS`;ui.deathBest.textContent=state.runMode==='daily'?`TODAY: ${progress.daily[dailyKey()]||0}`:`BEST: ${progress.best}`;ui.deathRank.textContent=rankFor(state.score);ui.death.classList.add('visible');toast(reason)},140)}
+  function rankFor(score){if(score>=700)return'FINAL PULSE';if(score>=550)return'SUPERNOVA';if(score>=450)return'MACHINE HEART';if(score>=350)return'FRACTURE';if(score>=250)return'REDLINE';if(score>=150)return'OVERDRIVE';if(score>=75)return'LOCKED IN';if(score>=25)return'FOUND THE RHYTHM';if(score>=10)return'WARMING UP';return'ONE MORE'}function goMenu(){state.mode='start';state.pending=[];state.held=false;ui.death.classList.remove('visible');ui.choice.classList.remove('visible');ui.challenge.classList.remove('visible');ui.menuMini.classList.add('hidden');ui.start.classList.add('visible');emit('death',{reason:'menu'});updateMenu()}
 
-  function resolveBeat(beatAt) {
-    state.lastBeatAt = beatAt; state.beatIndex += 1;
-    state.phase = phaseForBeat(state.beatIndex);
-    const targetBpm = state.runMode === 'practice' ? (selectedPractice === 'hard' ? 122 : 98) : Math.min(210, 104 + state.beatIndex*.19 + (state.doubleMode ? 12 : 0));
-    state.bpm = lerp(state.bpm, targetBpm, .10); state.beatMs = 60000/state.bpm; state.nextBeatAt = beatAt + state.beatMs;
+  async function shareLastRun(){const r=state.lastRun;if(!r)return;const c=document.createElement('canvas');c.width=c.height=1080;const x=c.getContext('2d'),w=WORLDS[r.world]||WORLDS.neon,g=x.createLinearGradient(0,0,1080,1080);g.addColorStop(0,w.bg0);g.addColorStop(1,'#020205');x.fillStyle=g;x.fillRect(0,0,1080,1080);x.strokeStyle=w.accent;x.lineWidth=8;x.strokeRect(54,54,972,972);x.fillStyle=w.accent;x.font='800 34px system-ui';x.fillText('ONE MORE BEAT',80,125);x.fillStyle='#fff';x.font='950 172px system-ui';x.fillText(String(r.score),80,390);x.font='850 44px system-ui';x.fillStyle=w.accent;x.fillText('BEATS',88,455);x.fillStyle='#fff';x.font='900 58px system-ui';x.fillText(r.worldName,80,585);x.font='700 34px system-ui';x.fillStyle='#aeb7ca';x.fillText(`${r.rank}  ·  ${r.perfects} PERFECTS  ·  ${r.bossClears} CHALLENGES`,80,660);x.fillStyle='#fff';x.font='800 38px system-ui';x.fillText('JUST ONE MORE.',80,920);const blob=await new Promise(res=>c.toBlob(res,'image/png')),text=`ONE MORE BEAT — ${r.score} beats · ${r.worldName} · ${r.rank}`;try{if(blob&&navigator.share){const file=new File([blob],`one-more-beat-${r.score}.png`,{type:'image/png'});if(!navigator.canShare||navigator.canShare({files:[file]})){await navigator.share({title:'ONE MORE BEAT',text,files:[file]});return}await navigator.share({title:'ONE MORE BEAT',text});return}}catch(_){}if(blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`one-more-beat-${r.score}.png`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}}
 
-    const desc = descriptorForBeat(state.beatIndex);
-    state.pending.push({ beat:state.beatIndex, beatAt, resolveAt:beatAt+inputGraceMs(), desc, heldAtBeat:state.held, holdStartedAt:state.held?state.pressStarted:null });
-    state.visualKick=1; state.visualBass=intensityForBeat(state.beatIndex)>=1 ? 1 : .35; if (state.beatIndex%2===0) state.visualSnare=1;
-    if (state.phase === 'drop') { state.dropPulse=1; state.flash=1; state.shake=7; emit('milestone',{kind:'drop',beat:state.beatIndex,themeId:state.themeId}); }
+  function updateMenu(){refreshUnlocks(false);ui.modeChips.forEach(b=>b.classList.toggle('selected',b.dataset.mode===selectedMode));ui.practiceOptions.classList.toggle('hidden',selectedMode!=='practice');ui.practiceChips.forEach(b=>b.classList.toggle('selected',b.dataset.practice===selectedPractice));const themeName=selectedTheme==='auto'?'AUTO':WORLDS[selectedTheme].name;ui.themeButton.textContent=`WORLD · ${themeName}`;ui.hapticsButton.textContent=`HAPTICS · ${settings.haptics?'ON':'OFF'}`;ui.tutorialPrompt?.classList.toggle('hidden',settings.tutorialDone);ui.startBest.textContent=`BEST: ${progress.best}`;if(selectedMode==='daily'){ui.startButton.textContent='START DAILY BEAT';ui.modeDetail.textContent=`${dailyKey()} · SAME PATTERN FOR EVERYONE · TODAY: ${progress.daily[dailyKey()]||0}`}else if(selectedMode==='practice'){ui.startButton.textContent='START PRACTICE';ui.modeDetail.textContent='NO SCORE · NO DEATH · MISSES REPEAT THE PHRASE.'}else{ui.startButton.textContent='START ENDLESS';ui.modeDetail.textContent='20 WORLDS · FULL SONG STRUCTURE · CHALLENGES · ADAPTIVE PHRASES'}}
+  function updateUI(){const next=descriptorForBeat(state.beatIndex+1);if(state.runMode==='practice'||state.runMode==='tutorial'){ui.scoreLabel.textContent=state.runMode==='tutorial'?'TUTORIAL':'PRACTICE';ui.score.textContent='—';ui.bestLabel.textContent='TEMPO';ui.best.textContent=Math.round(state.bpm)}else{ui.scoreLabel.textContent='BEATS';ui.score.textContent=state.score;ui.bestLabel.textContent=state.runMode==='daily'?'TODAY':'BEST';ui.best.textContent=state.runMode==='daily'?(progress.daily[dailyKey()]||0):progress.best}const mix=state.performance>=.9?'FULL MIX':state.performance>=.7?'LOCKED':state.performance>=.5?'THIN MIX':'RECOVERY',phaseLabel=state.phase.replaceAll('-',' ').toUpperCase();ui.streak.textContent=state.doubleMode?'×2 DANGER':`${Math.round(state.bpm)} BPM · ${phaseLabel} · ${mix}`;ui.phrase.textContent=next.phrase}
+  function toast(text){ui.toast.textContent=text;ui.toast.classList.remove('visible');void ui.toast.offsetWidth;ui.toast.classList.add('visible');clearTimeout(state.messageTimer);state.messageTimer=setTimeout(()=>ui.toast.classList.remove('visible'),620)}function burst(x,y,color,count,speed){for(let i=0;i<count;i++){const a=Math.random()*TAU,s=rand(.4,speed);state.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,color,size:rand(1,3.5)})}}
 
-    const newTheme = desiredTheme(); if (newTheme !== state.themeId) applyTheme(newTheme, true);
-    updateChallenge(); updateUI();
-    ui.dots.forEach((d,i)=>d.classList.toggle('active',i===state.beatIndex%4));
-    setTimeout(()=>ui.dots.forEach(d=>d.classList.remove('active')),80);
+  function update(dt,now){state.flash=Math.max(0,state.flash-dt*2.8);state.shake=Math.max(0,state.shake-dt*18);state.nearMiss=Math.max(0,state.nearMiss-dt*2.7);state.visualKick=Math.max(0,state.visualKick-dt*5.8);state.visualSnare=Math.max(0,state.visualSnare-dt*8);state.visualBass=Math.max(0,state.visualBass-dt*4.5);state.dropPulse=Math.max(0,state.dropPulse-dt*1.8);state.worldTransition=Math.max(0,state.worldTransition-dt*1.45);state.laneVisual=lerp(state.laneVisual,state.lane,clamp(dt*14,0,1));state.stars.forEach(s=>{s.x-=(25+state.bpm*.18)*s.z*dt;if(s.x<-5){s.x=W+5;s.y=Math.random()*H}});state.particles.forEach(p=>{p.x+=p.vx*60*dt;p.y+=p.vy*60*dt;p.vx*=.98;p.vy*=.98;p.life-=dt*2.1});state.particles=state.particles.filter(p=>p.life>0);if(state.mode!=='playing')return;if(state.practiceResetAt&&now>=state.practiceResetAt){state.practiceResetAt=0;restartPractice(now);return}state.beatPhase=clamp((now-state.lastBeatAt)/state.beatMs,0,1);processPending(now);if(state.mode!=='playing')return;updateChoice(now);while(now>=state.nextBeatAt&&state.mode==='playing'){resolveBeat(state.nextBeatAt);processPending(now)}}
 
-    emit('beat', { ...stateEventDetail('beat'), target:desc.type, phrase:desc.phrase, phraseStep:desc.step, boss:desc.boss });
-
-    if (state.runMode === 'endless' && !state.choiceActive && !state.doubleMode && !bossInfoForBeat(state.beatIndex) && !bossInfoForBeat(state.beatIndex+1) && state.beatIndex >= 64 && state.beatIndex-state.lastChoiceBeat >= 96 && state.beatIndex%32===0) startChoice(beatAt);
-    if (state.doubleMode && state.beatIndex >= state.doubleUntilBeat) endDouble();
-  }
-
-  function processPending(now) {
-    const ready = state.pending.filter(p => now >= p.resolveAt);
-    state.pending = state.pending.filter(p => now < p.resolveAt);
-    for (const p of ready) {
-      if (state.mode !== 'playing') break;
-      evaluateBeat(p, now);
-      state.input.delete(p.beat-2);
-    }
-  }
-
-  function evaluateBeat(p, now) {
-    const { desc, beat, beatAt } = p;
-    const rec = state.input.get(beat);
-    const good = goodWindowMs(); const perfect = perfectWindowMs();
-    let ok = true, quality = 'good', err = 0;
-
-    if (desc.type === 'tap') {
-      ok = !!rec?.tapAt; err = ok ? Math.abs(rec.tapAt-beatAt) : 999;
-      ok = ok && err <= good; quality = err <= perfect ? 'perfect' : err >= good*.72 ? 'near' : 'good';
-    } else if (desc.type === 'charge') {
-      if (rec?.downAt) {
-        const up = rec.upAt ?? now; const overlap = rec.downAt <= beatAt+good && up >= beatAt-55; const heldFor = up-rec.downAt;
-        ok = overlap && heldFor >= clamp(state.beatMs*.13,55,80); err = Math.abs(rec.downAt-beatAt);
-        quality = err <= perfect && up >= beatAt+30 ? 'perfect' : err >= good*.72 ? 'near' : 'good';
-      } else if (p.heldAtBeat && p.holdStartedAt) {
-        ok = true; err = Math.abs(p.holdStartedAt-beatAt); quality = err <= perfect ? 'perfect' : 'good';
-      } else ok = false;
-    } else if (desc.type === 'rest') {
-      const restTouch = p.heldAtBeat || (rec?.downAt ? Math.abs(rec.downAt-beatAt) <= good : false);
-      ok = !restTouch; quality = ok ? 'perfect' : 'miss';
-    }
-
-    if (!ok) {
-      emit('result',{quality:'miss',target:desc.type,beat,bpm:state.bpm,themeId:state.themeId});
-      if (state.runMode === 'practice') { practiceMiss(desc); return; }
-      die(desc.type === 'charge' ? 'HOLD THROUGH THE WALL' : desc.type === 'rest' ? 'WAIT MEANS WAIT' : 'TAP AS IT HITS THE LINE');
-      return;
-    }
-
-    if (quality === 'perfect') {
-      state.performance=clamp(state.performance+.035,0,1); state.perfectStreak++; state.runPerfects++;
-      state.runMaxPerfectStreak=Math.max(state.runMaxPerfectStreak,state.perfectStreak);
-      if(state.runMode!=='practice'){progress.perfectTotal++;progress.maxPerfectStreak=Math.max(progress.maxPerfectStreak,state.runMaxPerfectStreak);}
-      burst(timingX(),laneY(state.lane===0?-1:1),THEMES[state.themeId].accent,18,2.8);
-      if (state.perfectStreak>0 && state.perfectStreak%8===0) toast(`PERFECT ×${state.perfectStreak}`);
-    } else if (quality === 'near') {
-      state.performance=clamp(state.performance-.035,0,1); state.perfectStreak=0; state.nearMiss=1; state.shake=Math.max(state.shake,3.5);
-      toast('CLOSE');
-    } else { state.performance=clamp(state.performance+.006,0,1); state.perfectStreak=0; }
-
-    if (state.runMode !== 'practice') {
-      state.score += state.multiplier;
-      progress.best=Math.max(progress.best,state.score); progress.maxBeat=Math.max(progress.maxBeat,beat);
-      if (state.runMode === 'daily') progress.daily[dailyKey()] = Math.max(Number(progress.daily[dailyKey()]||0),state.score);
-      saveProgress(); refreshUnlocks(true);
-    }
-
-    emit('result',{quality,target:desc.type,beat,error:err,bpm:state.bpm,themeId:state.themeId,performance:state.performance,perfectStreak:state.perfectStreak});
-
-    if (desc.boss && desc.step === 7) {
-      state.bossClears++; state.dropPulse=1; state.shake=9; toast(`${desc.phrase} · CLEARED`);
-      emit('milestone',{kind:'boss-clear',name:desc.phrase,beat,themeId:state.themeId});
-    }
-    updateUI();
-  }
-
-  function practiceMiss(desc) {
-    state.nearMiss=1; state.shake=5; toast(`TRY AGAIN · ${desc.phrase}`);
-    state.practiceResetAt=performance.now()+420;
-  }
-
-  function restartPractice(now) {
-    const wasMode=selectedMode; selectedMode='practice'; resetRun(now,true); selectedMode=wasMode;
-    toast(`${PRACTICE[selectedPractice].name} · AGAIN`);
-  }
-
-  function startChoice(now) {
-    state.choiceActive=true; state.choiceStart=now; state.choiceEndBeat=state.beatIndex+4; state.choiceHoldAt=0; state.lastChoiceBeat=state.beatIndex;
-    ui.choice.classList.add('visible'); toast('CHOOSE'); emit('milestone',{kind:'choice',themeId:state.themeId});
-  }
-  function acceptDouble() {
-    if (!state.choiceActive) return;
-    state.choiceActive=false; state.doubleMode=true; state.multiplier=2; state.doubleUntilBeat=state.beatIndex+24;
-    ui.choice.classList.remove('visible'); state.flash=1; state.shake=7; toast('DOUBLE OR NOTHING');
-    emit('milestone',{kind:'double',themeId:state.themeId,bpm:state.bpm});
-  }
-  function endDouble() {
-    state.doubleMode=false; state.multiplier=1; progress.doubleSurvives++; saveProgress(); refreshUnlocks(true); toast('SURVIVED ×2');
-    emit('milestone',{kind:'double-clear',themeId:state.themeId});
-  }
-  function updateChoice(now) {
-    if (!state.choiceActive) return;
-    if (state.held && state.choiceHoldAt && now-state.choiceHoldAt >= Math.min(380,state.beatMs*.75)) acceptDouble();
-    if (state.beatIndex >= state.choiceEndBeat) { state.choiceActive=false; state.choiceHoldAt=0; ui.choice.classList.remove('visible'); toast('PLAY IT SAFE'); }
-  }
-
-  function updateChallenge() {
-    if (state.runMode === 'practice') { ui.challenge.classList.remove('visible'); return; }
-    const bi=bossInfoForBeat(state.beatIndex);
-    if (bi) {
-      ui.challengeKicker.textContent='CHALLENGE'; ui.challengeName.textContent=bi.boss.name; ui.challengeMeta.textContent=`${bi.step+1}/8 · STAY LOCKED`;
-      ui.challenge.classList.add('visible');
-      if (bi.step===0) emit('milestone',{kind:'boss-start',name:bi.boss.name,beat:state.beatIndex,themeId:state.themeId});
-      return;
-    }
-    const nextBoss=Math.ceil(Math.max(50,state.beatIndex+1)/50)*50; const away=nextBoss-state.beatIndex;
-    if (away>0 && away<=4) {
-      const boss=BOSSES[(Math.floor(nextBoss/50)-1)%BOSSES.length]; ui.challengeKicker.textContent='INCOMING'; ui.challengeName.textContent=boss.name; ui.challengeMeta.textContent=`${away} BEAT${away===1?'':'S'}`; ui.challenge.classList.add('visible');
-    } else ui.challenge.classList.remove('visible');
-  }
-
-  function expectedForBeat(beat) {
-    const pending=state.pending.find(p=>p.beat===beat); return pending ? pending.desc : descriptorForBeat(beat);
-  }
-  function registerTap(beat, now, rec) {
-    const beatAt=beatTimeFor(beat); const err=Math.abs(now-beatAt);
-    if (err>goodWindowMs()) return false;
-    rec.tapAt=now; state.lane=state.lane===0?1:0; state.flash=Math.max(state.flash,.18);
-    burst(playerX(),laneY(state.lane===0?-1:1),THEMES[state.themeId].accent,8,1.8); navigator.vibrate?.(7);
-    emit('input',{kind:'tap',beat,error:err,bpm:state.bpm,themeId:state.themeId}); return true;
-  }
-
-  function pointerDown(e) {
-    e.preventDefault(); const now=performance.now(); emit('audio-unlock'); if (state.mode!=='playing') return;
-    if (state.choiceActive) { state.held=true; state.choiceHoldAt=now; return; }
-    const beat=nearestBeat(now); const desc=expectedForBeat(beat); const rec=recordForBeat(beat);
-    rec.touched=true; rec.downAt=rec.downAt??now; rec.upAt=null; state.pressBeat=beat; state.pressStarted=now; state.pressExpected=desc.type; state.held=true;
-    if (desc.type==='tap') registerTap(beat,now,rec);
-    if (desc.type==='charge') emit('input',{kind:'hold',beat,error:Math.abs(now-beatTimeFor(beat)),bpm:state.bpm,themeId:state.themeId});
-  }
-  function pointerUp(e) {
-    e.preventDefault(); const now=performance.now(); if (state.mode!=='playing') return;
-    if (state.choiceActive) { if (state.choiceHoldAt && now-state.choiceHoldAt>=Math.min(380,state.beatMs*.75)) acceptDouble(); state.held=false; return; }
-    const beat=state.pressBeat; const rec=state.input.get(beat); if (rec) rec.upAt=now;
-    if (rec && state.pressExpected==='none' && now-state.pressStarted<=220) registerTap(beat,now,rec);
-    state.held=false; state.pressBeat=-99; state.pressExpected='none';
-  }
-  function pointerCancel(e) { e.preventDefault(); const now=performance.now(); if (state.pressBeat>-1) { const rec=state.input.get(state.pressBeat); if (rec) rec.upAt=now; } state.held=false; state.choiceHoldAt=0; }
-
-  function die(reason) {
-    if (state.mode!=='playing') return;
-    state.mode='dead'; state.pending=[]; state.held=false; ui.choice.classList.remove('visible'); ui.challenge.classList.remove('visible'); ui.menuMini.classList.add('hidden');
-    saveProgress(); refreshUnlocks(false); emit('death',{reason,score:state.score,mode:state.runMode,themeId:state.themeId});
-    navigator.vibrate?.([35,35,85]); state.shake=13; state.flash=.7;
-    setTimeout(()=>{
-      ui.deathMode.textContent=state.runMode==='daily'?'DAILY RUN ENDED':'RUN ENDED';
-      ui.deathScore.textContent=`${state.score} BEATS`;
-      ui.deathBest.textContent=state.runMode==='daily'?`TODAY: ${progress.daily[dailyKey()]||0}`:`BEST: ${progress.best}`;
-      ui.deathRank.textContent=rankFor(state.score); ui.death.classList.add('visible'); toast(reason);
-    },150);
-  }
-  function rankFor(score) {
-    if (score>=500) return 'MACHINE HEART'; if (score>=250) return 'REDLINE'; if (score>=100) return 'OVERDRIVE'; if (score>=50) return 'LOCKED IN'; if (score>=25) return 'FOUND THE RHYTHM'; if (score>=10) return 'WARMING UP'; return 'ONE MORE';
-  }
-
-  function goMenu() {
-    state.mode='start'; state.pending=[]; state.held=false; ui.death.classList.remove('visible'); ui.choice.classList.remove('visible'); ui.challenge.classList.remove('visible'); ui.menuMini.classList.add('hidden'); ui.start.classList.add('visible'); emit('death',{reason:'menu'}); updateMenu();
-  }
-
-  function updateMenu() {
-    refreshUnlocks(false);
-    ui.modeChips.forEach(b=>b.classList.toggle('selected',b.dataset.mode===selectedMode));
-    ui.practiceOptions.classList.toggle('hidden',selectedMode!=='practice'); ui.practiceChips.forEach(b=>b.classList.toggle('selected',b.dataset.practice===selectedPractice));
-    const themeName=selectedTheme==='auto'?'AUTO':THEMES[selectedTheme].name; ui.themeButton.textContent=`WORLD · ${themeName}`;
-    ui.startBest.textContent=`BEST: ${progress.best}`;
-    if (selectedMode==='daily') { ui.startButton.textContent='START DAILY BEAT'; ui.modeDetail.textContent=`${dailyKey()} · SAME PATTERN FOR EVERYONE · TODAY: ${progress.daily[dailyKey()]||0}`; }
-    else if (selectedMode==='practice') { ui.startButton.textContent='START PRACTICE'; ui.modeDetail.textContent='NO SCORE · NO DEATH · MISSES REPEAT THE PHRASE.'; }
-    else { ui.startButton.textContent='START ENDLESS'; ui.modeDetail.textContent='DESIGNED PHRASES · BUILDS · DROPS · CHALLENGES · NO MERCY.'; }
-  }
-
-  function updateUI() {
-    const next=descriptorForBeat(state.beatIndex+1);
-    if (state.runMode==='practice') { ui.scoreLabel.textContent='PRACTICE'; ui.score.textContent='—'; ui.bestLabel.textContent='TEMPO'; ui.best.textContent=Math.round(state.bpm); }
-    else { ui.scoreLabel.textContent='BEATS'; ui.score.textContent=state.score; ui.bestLabel.textContent=state.runMode==='daily'?'TODAY':'BEST'; ui.best.textContent=state.runMode==='daily'?(progress.daily[dailyKey()]||0):progress.best; }
-    const performanceLabel=state.performance>=.9?'FULL MIX':state.performance>=.7?'LOCKED':state.performance>=.5?'THIN MIX':'RECOVER';
-    ui.streak.textContent=state.doubleMode?'×2 DANGER':state.phase==='build'?'BUILDING…':state.phase==='drop'?'DROP':`${Math.round(state.bpm)} BPM · ${performanceLabel}`;
-    ui.phrase.textContent=next.phrase;
-  }
-
-  function toast(text) {
-    ui.toast.textContent=text; ui.toast.classList.remove('visible'); void ui.toast.offsetWidth; ui.toast.classList.add('visible');
-    clearTimeout(state.messageTimer); state.messageTimer=setTimeout(()=>ui.toast.classList.remove('visible'),620);
-  }
-  function burst(x,y,color,count,speed) {
-    for(let i=0;i<count;i++){const a=Math.random()*TAU,s=rand(.4,speed);state.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,color,size:rand(1,3.5)})}
-  }
-
-  function update(dt,now) {
-    state.flash=Math.max(0,state.flash-dt*2.8); state.shake=Math.max(0,state.shake-dt*18); state.nearMiss=Math.max(0,state.nearMiss-dt*2.7);
-    state.visualKick=Math.max(0,state.visualKick-dt*5.8); state.visualSnare=Math.max(0,state.visualSnare-dt*8); state.visualBass=Math.max(0,state.visualBass-dt*4.5); state.dropPulse=Math.max(0,state.dropPulse-dt*1.8);
-    state.laneVisual=lerp(state.laneVisual,state.lane,clamp(dt*14,0,1));
-    state.stars.forEach(s=>{s.x-=(25+state.bpm*.18)*s.z*dt;if(s.x<-5){s.x=W+5;s.y=Math.random()*H}});
-    state.particles.forEach(p=>{p.x+=p.vx*60*dt;p.y+=p.vy*60*dt;p.vx*=.98;p.vy*=.98;p.life-=dt*2.1}); state.particles=state.particles.filter(p=>p.life>0);
-    if(state.mode!=='playing') return;
-    if(state.practiceResetAt && now>=state.practiceResetAt){state.practiceResetAt=0;restartPractice(now);return}
-    state.beatPhase=clamp((now-state.lastBeatAt)/state.beatMs,0,1); processPending(now); if(state.mode!=='playing')return; updateChoice(now);
-    while(now>=state.nextBeatAt&&state.mode==='playing'){resolveBeat(state.nextBeatAt);processPending(now)}
-  }
-
-  function draw() {
-    const t=THEMES[state.themeId]||THEMES.neon; const sx=state.shake?rand(-state.shake,state.shake):0, sy=state.shake?rand(-state.shake*.45,state.shake*.45):0;
-    ctx.save();ctx.translate(sx,sy);drawBackground(t);drawStars(t);drawTunnel(t);drawTrack(t);drawObstacles(t);drawPulse(t);drawParticles();drawGlitch();ctx.restore();
-  }
-  function drawBackground(t) {
-    const bass=state.visualBass*.16+state.dropPulse*.2; const g=ctx.createRadialGradient(W*.44,H*.54,0,W*.5,H*.54,Math.max(W,H)*.75);
-    g.addColorStop(0,t.bg0);g.addColorStop(.5,t.bg1);g.addColorStop(1,'#010103');ctx.fillStyle=g;ctx.fillRect(-25,-25,W+50,H+50);
-    if(bass>0){ctx.fillStyle=`${t.accent}${Math.round(clamp(bass,0,.35)*255).toString(16).padStart(2,'0')}`;ctx.fillRect(-25,-25,W+50,H+50)}
-    if(state.flash>0){ctx.fillStyle=`rgba(255,255,255,${state.flash*.12})`;ctx.fillRect(-25,-25,W+50,H+50)}
-  }
-  function drawStars(t) {ctx.save();for(const s of state.stars){ctx.globalAlpha=s.a;ctx.fillStyle=t.star;const len=2+state.bpm/60*s.z;ctx.fillRect(s.x,s.y,len,Math.max(1,s.z))}ctx.restore()}
-  function drawTunnel(t) {
-    const cy=H*.54;ctx.save();ctx.strokeStyle=`${t.accent}20`;ctx.lineWidth=1+state.visualKick*.7;const spacing=clamp(W/7,55,110);const offset=(state.beatPhase*spacing)%spacing;
-    const bossCountdown=Math.max(0,50-(state.beatIndex%50||50));const buildPinch=state.phase==='build'?clamp((8-bossCountdown)/8,0,1):0;
-    for(let x=W+spacing-offset;x>-spacing;x-=spacing){const q=clamp((x-timingX())/Math.max(1,W-timingX()),0,1),pinch=1-buildPinch*.28*(1-q);const top=lerp(cy-H*.18,H*.08,q)*pinch+(cy*(1-pinch));const bottom=lerp(cy+H*.18,H*.96,q)*pinch+(cy*(1-pinch));ctx.beginPath();ctx.moveTo(x,top);ctx.lineTo(x,bottom);ctx.stroke()}
-    ctx.globalAlpha=.18+state.visualBass*.18;ctx.beginPath();ctx.moveTo(0,cy-H*.22);ctx.lineTo(W,H*.05);ctx.stroke();ctx.beginPath();ctx.moveTo(0,cy+H*.22);ctx.lineTo(W,H*.98);ctx.stroke();ctx.restore()
-  }
-  function drawTrack(t) {
-    const upper=laneY(-1),lower=laneY(1);ctx.save();ctx.lineWidth=2+state.visualKick*.5;ctx.shadowBlur=14+state.visualBass*18;ctx.shadowColor=t.accent;
-    for(const y of[upper,lower]){const g=ctx.createLinearGradient(0,0,W,0);g.addColorStop(0,'rgba(255,255,255,.06)');g.addColorStop(.2,`${t.accent}b5`);g.addColorStop(1,'rgba(255,255,255,.02)');ctx.strokeStyle=g;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
-    ctx.shadowBlur=0;ctx.strokeStyle='rgba(255,255,255,.14)';ctx.setLineDash([3,10]);ctx.beginPath();ctx.moveTo(timingX(),upper-34);ctx.lineTo(timingX(),lower+34);ctx.stroke();ctx.setLineDash([]);ctx.restore()
-  }
+  function draw(){const t=WORLDS[state.themeId]||WORLDS.neon,sx=state.shake?rand(-state.shake,state.shake):0,sy=state.shake?rand(-state.shake*.45,state.shake*.45):0;ctx.save();ctx.translate(sx,sy);drawBackground(t);drawStars(t);drawWorldGeometry(t);drawTunnel(t);drawTrack(t);drawObstacles(t);drawPulse(t);drawParticles();drawWorldTransition(t);drawGlitch();ctx.restore()}
+  function drawBackground(t){const bass=state.visualBass*.16+state.dropPulse*.2,g=ctx.createRadialGradient(W*.44,H*.54,0,W*.5,H*.54,Math.max(W,H)*.75);g.addColorStop(0,t.bg0);g.addColorStop(.5,t.bg1);g.addColorStop(1,'#010103');ctx.fillStyle=g;ctx.fillRect(-25,-25,W+50,H+50);if(bass>0){ctx.fillStyle=hexA(t.accent,clamp(bass,0,.3));ctx.fillRect(-25,-25,W+50,H+50)}if(state.flash>0){ctx.fillStyle=`rgba(255,255,255,${state.flash*.12})`;ctx.fillRect(-25,-25,W+50,H+50)}}function drawStars(t){ctx.save();for(const s of state.stars){ctx.globalAlpha=s.a;ctx.fillStyle=t.star;const len=2+state.bpm/60*s.z;ctx.fillRect(s.x,s.y,len,Math.max(1,s.z))}ctx.restore()}
+  function drawWorldGeometry(t){ctx.save();ctx.globalAlpha=.08+state.visualBass*.04;ctx.strokeStyle=t.secondary;ctx.lineWidth=1;const tm=performance.now()/1000,style=t.style;if(style===0){for(let i=1;i<6;i++){ctx.beginPath();ctx.arc(W*.5,H*.54,i*70+Math.sin(tm+i)*8,0,TAU);ctx.stroke()}}if(style===1){for(let x=0;x<W;x+=70){ctx.beginPath();ctx.moveTo(x+Math.sin(tm+x)*9,0);ctx.lineTo(x-80,H);ctx.stroke()}}if(style===2){for(let i=0;i<12;i++){const y=i/12*H,dx=Math.sin(tm*1.4+i)*35;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y+dx);ctx.stroke()}}if(style===3){for(let i=0;i<9;i++){const x=i/8*W;ctx.beginPath();ctx.moveTo(W*.5,H*.54);ctx.lineTo(x,0);ctx.stroke();ctx.beginPath();ctx.moveTo(W*.5,H*.54);ctx.lineTo(x,H);ctx.stroke()}}if(style===4){for(let i=0;i<18;i++){const x=(i*83+tm*120)%(W+120)-60;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x-160,H);ctx.stroke()}}ctx.restore()}
+  function drawTunnel(t){const cy=H*.54;ctx.save();ctx.strokeStyle=hexA(t.accent,.13);ctx.lineWidth=1+state.visualKick*.7;const spacing=clamp(W/7,55,110),offset=state.beatPhase*spacing%spacing,build=state.phase==='build'||state.phase==='build2',c=(state.beatIndex-1)%64,buildProgress=build?(state.phase==='build'?clamp((c-16)/8,0,1):clamp((c-48)/8,0,1)):0;for(let x=W+spacing-offset;x>-spacing;x-=spacing){const q=clamp((x-timingX())/Math.max(1,W-timingX()),0,1),pinch=1-buildProgress*.3*(1-q),top=lerp(cy-H*.18,H*.08,q)*pinch+cy*(1-pinch),bottom=lerp(cy+H*.18,H*.96,q)*pinch+cy*(1-pinch);ctx.beginPath();ctx.moveTo(x,top);ctx.lineTo(x,bottom);ctx.stroke()}ctx.globalAlpha=.18+state.visualBass*.18;ctx.beginPath();ctx.moveTo(0,cy-H*.22);ctx.lineTo(W,H*.05);ctx.stroke();ctx.beginPath();ctx.moveTo(0,cy+H*.22);ctx.lineTo(W,H*.98);ctx.stroke();ctx.restore()}
+  function drawTrack(t){const upper=laneY(-1),lower=laneY(1);ctx.save();ctx.lineWidth=2+state.visualKick*.5;ctx.shadowBlur=14+state.visualBass*18;ctx.shadowColor=t.accent;for(const y of[upper,lower]){const g=ctx.createLinearGradient(0,0,W,0);g.addColorStop(0,'rgba(255,255,255,.06)');g.addColorStop(.2,hexA(t.accent,.72));g.addColorStop(1,'rgba(255,255,255,.02)');ctx.strokeStyle=g;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}ctx.shadowBlur=0;ctx.strokeStyle='rgba(255,255,255,.14)';ctx.setLineDash([3,10]);ctx.beginPath();ctx.moveTo(timingX(),upper-34);ctx.lineTo(timingX(),lower+34);ctx.stroke();ctx.setLineDash([]);ctx.restore()}
   function obstacleX(beatsAway){return timingX()+beatsAway*(W-timingX())*.82}
-  function drawObstacleShape(desc,x,t,alpha=1){if(!desc||desc.type==='none'||x<-85||x>W+100)return;const scale=lerp(.68,1.15,clamp(1-(x-timingX())/W,0,1));ctx.save();ctx.globalAlpha=alpha;
-    if(desc.type==='tap'){const y=H*.54,r=25*scale;ctx.shadowBlur=24;ctx.shadowColor=t.secondary;ctx.strokeStyle=t.secondary;ctx.lineWidth=4*scale;ctx.beginPath();ctx.moveTo(x,y-r);ctx.lineTo(x+r,y);ctx.lineTo(x,y+r);ctx.lineTo(x-r,y);ctx.closePath();ctx.stroke();}
-    else if(desc.type==='charge'){const upper=laneY(-1),lower=laneY(1),h=lower-upper+74;ctx.shadowBlur=28;ctx.shadowColor=t.danger;ctx.strokeStyle=t.danger;ctx.lineWidth=5*scale;ctx.strokeRect(x-8*scale,upper-37,16*scale,h);ctx.fillStyle=`${t.danger}20`;ctx.fillRect(x-8*scale,upper-37,16*scale,h);}
-    else if(desc.type==='rest'){const y=H*.54;ctx.shadowBlur=20;ctx.shadowColor='#fff';ctx.strokeStyle='rgba(255,255,255,.82)';ctx.lineWidth=2*scale;ctx.beginPath();ctx.arc(x,y,26*scale,0,TAU);ctx.stroke();}ctx.restore()}
-  function drawObstacles(t){const pending=state.pending[0];if(pending){const late=(performance.now()-pending.beatAt)/state.beatMs;drawObstacleShape(pending.desc,timingX()-late*(W-timingX())*.82,t,1)}const a=descriptorForBeat(state.beatIndex+1),b=descriptorForBeat(state.beatIndex+2);drawObstacleShape(a,obstacleX(1-state.beatPhase),t,1);drawObstacleShape(b,obstacleX(2-state.beatPhase),t,.7)}
+  function drawObstacleShape(desc,x,t,alpha=1){if(!desc||desc.type==='none'||x<-85||x>W+100)return;const scale=lerp(.68,1.15,clamp(1-(x-timingX())/W,0,1)),tm=performance.now()/1000;ctx.save();ctx.globalAlpha=alpha;if(desc.type==='tap'){const y=H*.54,r=25*scale,rot=tm*2.6+state.beatPhase*.7;ctx.translate(x,y);ctx.rotate(rot);ctx.shadowBlur=24;ctx.shadowColor=t.secondary;ctx.strokeStyle=t.secondary;ctx.lineWidth=4*scale;ctx.beginPath();ctx.moveTo(0,-r);ctx.lineTo(r,0);ctx.lineTo(0,r);ctx.lineTo(-r,0);ctx.closePath();ctx.stroke();ctx.globalAlpha*=.35;ctx.rotate(-rot*1.8);ctx.strokeRect(-r*.55,-r*.55,r*1.1,r*1.1)}else if(desc.type==='charge'){const upper=laneY(-1),lower=laneY(1),h=lower-upper+74,pulse=.6+.4*Math.sin(tm*8-state.beatPhase*3);ctx.shadowBlur=28+12*pulse;ctx.shadowColor=t.danger;ctx.strokeStyle=t.danger;ctx.lineWidth=(4+2*pulse)*scale;ctx.strokeRect(x-8*scale,upper-37,16*scale,h);ctx.fillStyle=hexA(t.danger,.08+.11*pulse);ctx.fillRect(x-8*scale,upper-37,16*scale,h);for(let i=0;i<4;i++){const yy=upper-30+i*h/4;ctx.globalAlpha=alpha*(.25+.35*pulse);ctx.beginPath();ctx.moveTo(x-20*scale,yy);ctx.lineTo(x+20*scale,yy);ctx.stroke()}}else if(desc.type==='rest'){const y=H*.54,breathe=1+.12*Math.sin(tm*3.2),r=26*scale*breathe;ctx.shadowBlur=18+8*breathe;ctx.shadowColor='#fff';ctx.strokeStyle='rgba(255,255,255,.82)';ctx.lineWidth=2*scale;ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.stroke();ctx.globalAlpha*=.25;ctx.beginPath();ctx.arc(x,y,r+9,0,TAU);ctx.stroke()}ctx.restore()}
+  function drawObstacles(t){const p=state.pending[0];if(p){const late=(performance.now()-p.beatAt)/state.beatMs;drawObstacleShape(p.desc,timingX()-late*(W-timingX())*.82,t,1)}const a=descriptorForBeat(state.beatIndex+1),b=descriptorForBeat(state.beatIndex+2);drawObstacleShape(a,obstacleX(1-state.beatPhase),t,1);drawObstacleShape(b,obstacleX(2-state.beatPhase),t,.7)}
   function drawPulse(t){const x=playerX(),y=lerp(laneY(-1),laneY(1),state.laneVisual),beatPulse=1+Math.pow(1-state.beatPhase,5)*.5+state.visualKick*.18,holdBoost=state.held?1.35:1;state.trails.unshift({x,y,life:1});state.trails=state.trails.slice(0,18).map(v=>({...v,life:v.life*.84}));ctx.save();state.trails.forEach((v,i)=>{ctx.globalAlpha=v.life*.24;ctx.fillStyle=t.trail;ctx.beginPath();ctx.arc(v.x-i*5,v.y,Math.max(1,6*v.life),0,TAU);ctx.fill()});ctx.globalAlpha=1;ctx.shadowBlur=28+state.visualBass*22+(state.held?16:0);ctx.shadowColor=t.accent;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x,y,7*beatPulse*holdBoost,0,TAU);ctx.fill();ctx.fillStyle=t.accent;ctx.beginPath();ctx.arc(x,y,4*beatPulse*holdBoost,0,TAU);ctx.fill();if(state.held){ctx.strokeStyle=t.accent;ctx.lineWidth=2;ctx.globalAlpha=.6;ctx.beginPath();ctx.arc(x,y,15+Math.sin(performance.now()/70)*3,0,TAU);ctx.stroke()}ctx.restore()}
-  function drawParticles(){ctx.save();for(const p of state.particles){ctx.globalAlpha=p.life;ctx.fillStyle=p.color;ctx.shadowBlur=8;ctx.shadowColor=p.color;ctx.fillRect(p.x,p.y,p.size,p.size)}ctx.restore()}
-  function drawGlitch(){if(state.nearMiss<=0)return;ctx.save();ctx.globalAlpha=state.nearMiss*.16;for(let i=0;i<4;i++){const y=Math.random()*H,h=rand(2,10),dx=rand(-16,16);ctx.drawImage(canvas,0,y*DPR,canvas.width,h*DPR,dx,y,W,h)}ctx.restore()}
+  function drawParticles(){ctx.save();for(const p of state.particles){ctx.globalAlpha=p.life;ctx.fillStyle=p.color;ctx.shadowBlur=8;ctx.shadowColor=p.color;ctx.fillRect(p.x,p.y,p.size,p.size)}ctx.restore()}function drawWorldTransition(t){if(state.worldTransition<=0)return;const p=1-state.worldTransition;ctx.save();ctx.globalAlpha=state.worldTransition*.42;ctx.strokeStyle=t.accent;ctx.lineWidth=4;const max=Math.hypot(W,H);for(let i=0;i<4;i++){ctx.beginPath();ctx.arc(W*.5,H*.54,max*(p*.35+i*.08),0,TAU);ctx.stroke()}ctx.fillStyle=hexA(t.secondary,state.worldTransition*.08);ctx.fillRect(0,0,W,H);ctx.restore()}function drawGlitch(){if(state.nearMiss<=0)return;ctx.save();ctx.globalAlpha=state.nearMiss*.14;for(let i=0;i<3;i++){const y=Math.random()*H,h=rand(2,9),dx=rand(-13,13);ctx.drawImage(canvas,0,y*DPR,canvas.width,h*DPR,dx,y,W,h)}ctx.restore()}
 
-  let lastFrame=performance.now(); function frame(now){const dt=Math.min(.033,(now-lastFrame)/1000);lastFrame=now;update(dt,now);draw();requestAnimationFrame(frame)}
+  let lastFrame=performance.now();function frame(now){const dt=Math.min(.033,(now-lastFrame)/1000);lastFrame=now;update(dt,now);draw();requestAnimationFrame(frame)}
 
-  ui.modeChips.forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();selectedMode=b.dataset.mode;updateMenu()}));
-  ui.practiceChips.forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();selectedPractice=b.dataset.practice;updateMenu()}));
-  ui.themeButton.addEventListener('click',e=>{e.stopPropagation();cycleTheme()});
-  ui.startButton.addEventListener('click',e=>{e.stopPropagation();resetRun(performance.now())});
-  ui.retryButton.addEventListener('click',e=>{e.stopPropagation();resetRun(performance.now())});
-  ui.deathMenu.addEventListener('click',e=>{e.stopPropagation();goMenu()});
-  ui.menuMini.addEventListener('click',e=>{e.stopPropagation();goMenu()});
-  ui.mute.addEventListener('click',e=>{e.stopPropagation();muted=!muted;localStorage.setItem(SETTINGS_KEY,JSON.stringify({muted}));ui.mute.textContent=muted?'×':'♪';emit('mute',{muted});emit('audio-unlock')});
-  canvas.addEventListener('pointerdown',pointerDown,{passive:false});canvas.addEventListener('pointerup',pointerUp,{passive:false});canvas.addEventListener('pointercancel',pointerCancel,{passive:false});canvas.addEventListener('contextmenu',e=>e.preventDefault());
-  document.addEventListener('keydown',e=>{if(e.code!=='Space'||e.repeat)return;e.preventDefault();pointerDown(e)});document.addEventListener('keyup',e=>{if(e.code==='Space')pointerUp(e)});
-  document.addEventListener('visibilitychange',()=>{if(document.hidden&&state.mode==='playing'&&state.runMode!=='practice')die('RHYTHM LOST')});window.addEventListener('resize',resize);window.addEventListener('orientationchange',resize);
+  ui.modeChips.forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();selectedMode=b.dataset.mode;updateMenu()}));ui.practiceChips.forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();selectedPractice=b.dataset.practice;updateMenu()}));ui.themeButton.addEventListener('click',e=>{e.stopPropagation();openWorldPanel()});ui.hapticsButton?.addEventListener('click',e=>{e.stopPropagation();cycleHaptics()});ui.tutorialButton?.addEventListener('click',e=>{e.stopPropagation();startTutorial()});ui.worldClose?.addEventListener('click',e=>{e.stopPropagation();ui.worldPanel.classList.remove('visible')});ui.startButton.addEventListener('click',e=>{e.stopPropagation();resetRun(performance.now())});ui.retryButton.addEventListener('click',e=>{e.stopPropagation();resetRun(performance.now())});ui.deathMenu.addEventListener('click',e=>{e.stopPropagation();goMenu()});ui.shareRun?.addEventListener('click',e=>{e.stopPropagation();shareLastRun()});ui.menuMini.addEventListener('click',e=>{e.stopPropagation();goMenu()});ui.mute.addEventListener('click',e=>{e.stopPropagation();settings.muted=!settings.muted;saveSettings();ui.mute.textContent=settings.muted?'×':'♪';emit('mute',{muted:settings.muted});emit('audio-unlock')});canvas.addEventListener('pointerdown',pointerDown,{passive:false});canvas.addEventListener('pointerup',pointerUp,{passive:false});canvas.addEventListener('pointercancel',pointerCancel,{passive:false});canvas.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('keydown',e=>{if(e.code!=='Space'||e.repeat)return;e.preventDefault();pointerDown(e)});document.addEventListener('keyup',e=>{if(e.code==='Space')pointerUp(e)});document.addEventListener('visibilitychange',()=>{if(document.hidden&&state.mode==='playing'&&state.runMode!=='practice'&&state.runMode!=='tutorial')die('RHYTHM LOST')});window.addEventListener('resize',resize);window.addEventListener('orientationchange',resize);
 
-  refreshUnlocks(false); applyTheme('neon'); ui.mute.textContent=muted?'×':'♪'; resize(); updateMenu(); updateUI(); requestAnimationFrame(frame);
-  if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+  refreshUnlocks(false);applyTheme('neon');ui.mute.textContent=settings.muted?'×':'♪';resize();updateMenu();updateUI();requestAnimationFrame(frame);if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 })();
