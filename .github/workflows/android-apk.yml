@@ -43,12 +43,14 @@ jobs:
         run: |
           set -euxo pipefail
           node --check game.js
+          node --check music.js
           rm -rf dist android
           mkdir -p dist/icons
-          cp index.html styles.css game.js manifest.webmanifest sw.js dist/
+          cp index.html styles.css game.js music.js manifest.webmanifest sw.js dist/
           cp icons/icon.svg dist/icons/
           test -s dist/index.html
           test -s dist/game.js
+          test -s dist/music.js
           test -s dist/styles.css
 
       - name: Create Android project
