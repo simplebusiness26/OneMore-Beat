@@ -291,7 +291,7 @@
     state.bpm = lerp(state.bpm, targetBpm, .10); state.beatMs = 60000/state.bpm; state.nextBeatAt = beatAt + state.beatMs;
 
     const desc = descriptorForBeat(state.beatIndex);
-    state.pending.push({ beat:state.beatIndex, beatAt, resolveAt:beatAt+inputGraceMs(), desc });
+    state.pending.push({ beat:state.beatIndex, beatAt, resolveAt:beatAt+inputGraceMs(), desc, heldAtBeat:state.held, holdStartedAt:state.held?state.pressStarted:null });
     state.visualKick=1; state.visualBass=intensityForBeat(state.beatIndex)>=1 ? 1 : .35; if (state.beatIndex%2===0) state.visualSnare=1;
     if (state.phase === 'drop') { state.dropPulse=1; state.flash=1; state.shake=7; emit('milestone',{kind:'drop',beat:state.beatIndex,themeId:state.themeId}); }
 
@@ -302,7 +302,7 @@
 
     emit('beat', { ...stateEventDetail('beat'), target:desc.type, phrase:desc.phrase, phraseStep:desc.step, boss:desc.boss });
 
-    if (state.runMode === 'endless' && !state.choiceActive && !state.doubleMode && state.beatIndex >= 64 && state.beatIndex-state.lastChoiceBeat >= 96 && state.beatIndex%32===0) startChoice(beatAt);
+    if (state.runMode === 'endless' && !state.choiceActive && !state.doubleMode && !bossInfoForBeat(state.beatIndex) && !bossInfoForBeat(state.beatIndex+1) && state.beatIndex >= 64 && state.beatIndex-state.lastChoiceBeat >= 96 && state.beatIndex%32===0) startChoice(beatAt);
     if (state.doubleMode && state.beatIndex >= state.doubleUntilBeat) endDouble();
   }
 
@@ -326,14 +326,15 @@
       ok = !!rec?.tapAt; err = ok ? Math.abs(rec.tapAt-beatAt) : 999;
       ok = ok && err <= good; quality = err <= perfect ? 'perfect' : err >= good*.72 ? 'near' : 'good';
     } else if (desc.type === 'charge') {
-      if (!rec?.downAt) ok = false;
-      else {
+      if (rec?.downAt) {
         const up = rec.upAt ?? now; const overlap = rec.downAt <= beatAt+good && up >= beatAt-55; const heldFor = up-rec.downAt;
         ok = overlap && heldFor >= clamp(state.beatMs*.13,55,80); err = Math.abs(rec.downAt-beatAt);
         quality = err <= perfect && up >= beatAt+30 ? 'perfect' : err >= good*.72 ? 'near' : 'good';
-      }
+      } else if (p.heldAtBeat && p.holdStartedAt) {
+        ok = true; err = Math.abs(p.holdStartedAt-beatAt); quality = err <= perfect ? 'perfect' : 'good';
+      } else ok = false;
     } else if (desc.type === 'rest') {
-      const restTouch = rec?.downAt ? Math.abs(rec.downAt-beatAt) <= good : false;
+      const restTouch = p.heldAtBeat || (rec?.downAt ? Math.abs(rec.downAt-beatAt) <= good : false);
       ok = !restTouch; quality = ok ? 'perfect' : 'miss';
     }
 
@@ -345,8 +346,9 @@
     }
 
     if (quality === 'perfect') {
-      state.performance=clamp(state.performance+.035,0,1); state.perfectStreak++; state.runPerfects++; progress.perfectTotal++;
-      state.runMaxPerfectStreak=Math.max(state.runMaxPerfectStreak,state.perfectStreak); progress.maxPerfectStreak=Math.max(progress.maxPerfectStreak,state.runMaxPerfectStreak);
+      state.performance=clamp(state.performance+.035,0,1); state.perfectStreak++; state.runPerfects++;
+      state.runMaxPerfectStreak=Math.max(state.runMaxPerfectStreak,state.perfectStreak);
+      if(state.runMode!=='practice'){progress.perfectTotal++;progress.maxPerfectStreak=Math.max(progress.maxPerfectStreak,state.runMaxPerfectStreak);}
       burst(timingX(),laneY(state.lane===0?-1:1),THEMES[state.themeId].accent,18,2.8);
       if (state.perfectStreak>0 && state.perfectStreak%8===0) toast(`PERFECT ×${state.perfectStreak}`);
     } else if (quality === 'near') {
