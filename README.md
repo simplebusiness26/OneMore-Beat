@@ -1,46 +1,30 @@
 # ONE MORE BEAT
 
-**Survive the rhythm. Miss one beat and the run is over.**
+A one-finger rhythm survival game where the gameplay **is** the soundtrack.
 
-ONE MORE BEAT is a one-finger, beat-synchronised survival game in the ONE MORE series. The world, hazards, feedback and procedural soundtrack intensify as the player's run gets longer.
+## V2
 
-## Core loop
+- Designed 8-beat rhythm phrases instead of random obstacle spam
+- TAP / HOLD / WAIT timing with phone-latency grace windows
+- Adaptive procedural soundtrack that grows from heartbeat to full redline mix
+- Music richness reacts to PERFECT, good and near-miss timing
+- Build-ups and drops every 50 beats
+- 8-beat challenge sequences: HEARTBREAK, OVERDRIVE TEST, BLACKOUT, AFTERBURN and REDLINE
+- Five unlockable audio/visual worlds with signature rhythm phrases
+- Daily Beat with a deterministic global daily sequence
+- Practice Mode for TAP, HOLD, MIX and HARD patterns; misses repeat instead of ending the session
+- DOUBLE OR NOTHING in Endless Mode only
+- Immediate silence on death and instant ONE MORE? restart
+- Offline/PWA support and Android APK builds through GitHub Actions
 
-- **Tap** to switch between the two pulse lanes.
-- **Hold** to charge through full-track walls.
-- **Wait** when the track is clear.
-- Actions are judged against the beat window.
-- Every successful beat increases the score and accelerates the tempo.
-- At intervals the player can **hold to enter DOUBLE OR NOTHING**, earning ×2 beats while hazard density and tempo jump.
-- Miss a required action and the run ends immediately. Tap **ONE MORE?** for an instant restart.
+## Controls
 
-## Progression
+- **TAP** when a TAP gate reaches the timing line
+- **HOLD** through a HOLD wall
+- **WAIT** without touching when a WAIT ring reaches the line
 
-- 10 beats — chain milestone
-- 25 beats — bass layer enters
-- 50 beats — percussion expands
-- 100 beats — OVERDRIVE and synth layer
-- 250 beats — REDLINE
-- 500 beats — MACHINE HEART territory
+For the best experience, use headphones.
 
-The soundtrack is generated at runtime with the Web Audio API, so the project contains no licensed music or audio assets.
+## Android
 
-## Android APK
-
-Every push to `main` runs the **Build Android APK** GitHub Action. It packages the game with Capacitor, verifies the APK, uploads it as a workflow artifact, and publishes/updates the `android-latest` GitHub Release.
-
-After the workflow is green, download **one-more-beat-debug.apk** from the latest release and install it on Android.
-
-## Web version
-
-The game is also a self-contained progressive web app. Serve the repository with any static web server. It supports touch, mouse/pointer input, and the Space key.
-
-## Technical notes
-
-- HTML5 Canvas renderer
-- Procedural Web Audio music and SFX
-- localStorage high score
-- Offline service worker cache
-- Responsive portrait layout
-- Capacitor Android packaging
-- No backend and no paid services required
+The latest APK is published automatically to the `android-latest` GitHub Release after a successful build.
