@@ -38,14 +38,16 @@ jobs:
         id: npm
         run: npm install --no-audit --no-fund
 
-      - name: Prepare and validate web bundle
+      - name: Prepare and validate V3 web bundle
         id: web
         run: |
           set -euxo pipefail
-          python3 scripts/v2-fairness-hotfix.py
-          python3 scripts/remove-action-flashes.py
           node --check game.js
           node --check music.js
+          grep -q "finalpulse" game.js
+          grep -q "20 WORLDS" README.md
+          grep -q "share-run" index.html
+          grep -q "one-more-beat-v4-20-worlds" sw.js
           rm -rf dist android
           mkdir -p dist/icons
           cp index.html styles.css game.js music.js manifest.webmanifest sw.js dist/
@@ -154,11 +156,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ "$JOB_STATUS" = "success" ]; then
-            git add build-status.txt game.js
-          else
-            git add build-status.txt
-          fi
+          git add build-status.txt
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "Record Android build status [skip ci]"
           git push
