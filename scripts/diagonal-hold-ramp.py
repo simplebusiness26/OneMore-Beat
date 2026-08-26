@@ -93,5 +93,5 @@ if not m:
     raise SystemExit('drawPulse function not found')
 s = s[:m.start()] + pulse_func + "\n  function drawParticles" + s[m.end():]
 
-s = s.replace("\n})();", f"\n  // {marker}\n})();", 1)
+s = s.replace("\n})();", "\n  // " + marker + "\n})();", 1)
 path.write_text(s)
