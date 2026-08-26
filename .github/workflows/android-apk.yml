@@ -42,9 +42,11 @@ jobs:
         id: web
         run: |
           set -euxo pipefail
+          python3 scripts/diagonal-hold-ramp.py
           node --check game.js
           node --check music.js
           grep -q "finalpulse" game.js
+          grep -q "DIAGONAL_HOLD_RAMP_V1" game.js
           grep -qi "20 worlds" README.md
           grep -q "share-run" index.html
           grep -q "one-more-beat-v4-20-worlds" sw.js
@@ -156,7 +158,11 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add build-status.txt
+          if [ "$JOB_STATUS" = "success" ]; then
+            git add build-status.txt game.js
+          else
+            git add build-status.txt
+          fi
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "Record Android build status [skip ci]"
           git push
